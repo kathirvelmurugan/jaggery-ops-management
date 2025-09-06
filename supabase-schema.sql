@@ -1,5 +1,6 @@
 -- =============================================================================
--- JAGGERY OPERATIONS MANAGEMENT SYSTEM - SUPABASE DATABASE SCHEMA
+-- JAGGERY OPERATIONS MANAGEMENT SYSTEM - ENHANCED SUPABASE DATABASE SCHEMA
+-- Multi-Product Lot Architecture with Normalized Structure
 -- =============================================================================
 
 -- Enable necessary extensions
@@ -9,84 +10,201 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 1. MASTER DATA TABLES
 -- =============================================================================
 
--- Products table (Jaggery types)
+-- Products table (Enhanced with activation status)
 CREATE TABLE products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
+    product_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_name VARCHAR(100) NOT NULL UNIQUE,
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Farmers table
+-- Farmers table (Enhanced with auction and billing names)
 CREATE TABLE farmers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20),
+    farmer_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    auction_name VARCHAR(100) NOT NULL, -- Name used at auction
+    billing_name VARCHAR(100) NOT NULL, -- Legal/payment name
+    contact_person_name VARCHAR(100),
     address TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Customers table
-CREATE TABLE customers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    company_name VARCHAR(100),
-    phone VARCHAR(20),
+    pincode VARCHAR(10),
+    mobile_primary VARCHAR(15),
+    mobile_alternate VARCHAR(15),
     email VARCHAR(100),
+    farmer_since_year INTEGER,
+    location_link TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Customers table (Enhanced with bag marking and detailed contact info)
+CREATE TABLE customers (
+    customer_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_name VARCHAR(100) NOT NULL,
+    contact_person_name VARCHAR(100),
+    bag_marking VARCHAR(50), -- IMPORTANT: Default mark for this customer
     address TEXT,
+    pincode VARCHAR(10),
+    mobile_primary VARCHAR(15),
+    mobile_alternate VARCHAR(15),
+    email VARCHAR(100),
+    customer_since_year INTEGER,
+    location_link TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Warehouses table
+-- Warehouses table (Enhanced structure)
 CREATE TABLE warehouses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    location VARCHAR(200),
-    capacity_kg DECIMAL(10,2),
+    warehouse_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    warehouse_name VARCHAR(100) NOT NULL UNIQUE,
+    address TEXT,
+    pincode VARCHAR(10),
+    contact_person_name VARCHAR(100),
+    contact_number VARCHAR(15),
+    location_link TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Users & Roles (Authentication system)
+CREATE TABLE roles (
+    role_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    role_name VARCHAR(50) NOT NULL UNIQUE CHECK (role_name IN ('admin', 'manager', 'dispatch')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL, -- Store hashed passwords
+    role_id UUID NOT NULL REFERENCES roles(role_id) ON DELETE RESTRICT,
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- =============================================================================
--- 2. INVENTORY MANAGEMENT TABLES
+-- 2. TRANSACTIONAL DATA MODELS (REVISED FOR MULTI-PRODUCT LOTS)
 -- =============================================================================
 
--- Lots table (Purchase records)
+-- Lots table (Header for purchases - contains metadata only)
 CREATE TABLE lots (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    lot_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     lot_number VARCHAR(50) NOT NULL UNIQUE,
-    farmer_id UUID NOT NULL REFERENCES farmers(id) ON DELETE RESTRICT,
-    warehouse_id UUID NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
     purchase_date DATE NOT NULL,
-    bay_number VARCHAR(20),
-    total_purchase_value DECIMAL(12,2) DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'Available' CHECK (status IN ('Available', 'Partially Sold', 'Sold Out', 'On Hold')),
+    farmer_id UUID NOT NULL REFERENCES farmers(farmer_id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Lot Products table (Multi-product support for lots)
-CREATE TABLE lot_products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    lot_id UUID NOT NULL REFERENCES lots(id) ON DELETE CASCADE,
-    product_id UUID NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-    num_bags INTEGER DEFAULT 0 CHECK (num_bags >= 0),
-    loose_kg DECIMAL(8,2) DEFAULT 0 CHECK (loose_kg >= 0),
-    sippam_kg DECIMAL(6,2) DEFAULT 30 CHECK (sippam_kg > 0),
-    purchase_rate DECIMAL(8,2) NOT NULL CHECK (purchase_rate >= 0),
-    initial_total_kg DECIMAL(10,2) GENERATED ALWAYS AS (num_bags * sippam_kg + loose_kg) STORED,
-    current_total_kg DECIMAL(10,2) NOT NULL,
-    product_value DECIMAL(12,2) GENERATED ALWAYS AS (initial_total_kg * purchase_rate) STORED,
-    status VARCHAR(20) DEFAULT 'Available' CHECK (status IN ('Available', 'Reserved', 'Sold Out')),
+-- LotItems table (Individual products within each lot)
+CREATE TABLE lot_items (
+    lot_item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    lot_id UUID NOT NULL REFERENCES lots(lot_id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(product_id) ON DELETE RESTRICT,
+    warehouse_id UUID NOT NULL REFERENCES warehouses(warehouse_id) ON DELETE RESTRICT,
+    bay_number VARCHAR(20),
+    
+    -- Quantity fields
+    initial_bags INTEGER DEFAULT 0 CHECK (initial_bags >= 0),
+    initial_loose_kg DECIMAL(10,3) DEFAULT 0 CHECK (initial_loose_kg >= 0),
+    initial_total_kg DECIMAL(10,3) NOT NULL CHECK (initial_total_kg >= 0),
+    current_total_kg DECIMAL(10,3) NOT NULL CHECK (current_total_kg >= 0),
+    
+    -- Financial fields
+    purchase_rate_per_kg DECIMAL(10,2) NOT NULL CHECK (purchase_rate_per_kg >= 0),
+    total_purchase_value DECIMAL(15,2) NOT NULL CHECK (total_purchase_value >= 0),
+    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     
-    CONSTRAINT lot_products_current_kg_check CHECK (current_total_kg >= 0),
-    CONSTRAINT lot_products_current_kg_max_check CHECK (current_total_kg <= initial_total_kg),
-    UNIQUE(lot_id, product_id)
+    -- Constraints
+    CONSTRAINT lot_items_current_kg_max_check CHECK (current_total_kg <= initial_total_kg),
+    UNIQUE(lot_id, product_id, warehouse_id, bay_number) -- Prevent duplicate entries
+);
+
+-- =============================================================================
+-- 3. PURCHASE MANAGEMENT
+-- =============================================================================
+
+-- Purchase Payments (Links to lot header, not individual items)
+CREATE TABLE purchase_payments (
+    payment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    lot_id UUID NOT NULL REFERENCES lots(lot_id) ON DELETE CASCADE,
+    amount_paid DECIMAL(15,2) NOT NULL CHECK (amount_paid > 0),
+    payment_date DATE NOT NULL,
+    payment_method VARCHAR(20) NOT NULL CHECK (payment_method IN ('Cash', 'RTGS', 'Cheque', 'UPI', 'NEFT')),
+    reference_details TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- =============================================================================
+-- 4. SALES MANAGEMENT
+-- =============================================================================
+
+-- Sales Orders (Unchanged)
+CREATE TABLE sales_orders (
+    order_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id UUID NOT NULL REFERENCES customers(customer_id) ON DELETE RESTRICT,
+    order_date DATE NOT NULL,
+    status VARCHAR(30) DEFAULT 'Draft' CHECK (status IN ('Draft', 'Packing in Progress', 'Packed', 'Dispatched', 'Delivered', 'Cancelled')),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Pick List Items (Now links to specific LotItems)
+CREATE TABLE picklist_items (
+    picklist_item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES sales_orders(order_id) ON DELETE CASCADE,
+    lot_item_id UUID NOT NULL REFERENCES lot_items(lot_item_id) ON DELETE RESTRICT,
+    customer_mark VARCHAR(100), -- Can override default customer bag marking
+    planned_bags INTEGER DEFAULT 0 CHECK (planned_bags >= 0),
+    planned_loose_kg DECIMAL(10,3) DEFAULT 0 CHECK (planned_loose_kg >= 0),
+    sale_rate_per_kg DECIMAL(10,2) NOT NULL CHECK (sale_rate_per_kg >= 0),
+    packaging_type VARCHAR(20) DEFAULT 'Bag' CHECK (packaging_type IN ('Bag', 'Box', 'Bulk')),
+    status VARCHAR(20) DEFAULT 'To Be Packed' CHECK (status IN ('To Be Packed', 'Packed', 'Dispatched')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Dispatch Confirmations (Unchanged logic, follows PickListItems)
+CREATE TABLE dispatch_confirmations (
+    dispatch_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    picklist_item_id UUID NOT NULL REFERENCES picklist_items(picklist_item_id) ON DELETE CASCADE,
+    actual_bags INTEGER NOT NULL CHECK (actual_bags >= 0),
+    actual_loose_kg DECIMAL(10,3) NOT NULL CHECK (actual_loose_kg >= 0),
+    actual_total_kg DECIMAL(10,3) NOT NULL CHECK (actual_total_kg >= 0),
+    packed_by_user_id UUID REFERENCES users(user_id),
+    confirmation_timestamp TIMESTAMPTZ DEFAULT NOW(),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Sales Payments (Unchanged, links to SalesOrders)
+CREATE TABLE sales_payments (
+    payment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES sales_orders(order_id) ON DELETE CASCADE,
+    amount_paid DECIMAL(15,2) NOT NULL CHECK (amount_paid > 0),
+    payment_date DATE NOT NULL,
+    payment_method VARCHAR(20) NOT NULL CHECK (payment_method IN ('Cash', 'RTGS', 'Cheque', 'UPI', 'NEFT')),
+    reference_details TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- =============================================================================
+-- 5. SYSTEM SETTINGS
+-- =============================================================================
+
+CREATE TABLE settings (
+    setting_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    setting_key VARCHAR(50) NOT NULL UNIQUE,
+    setting_value TEXT,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- =============================================================================

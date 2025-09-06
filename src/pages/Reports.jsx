@@ -5,44 +5,46 @@ import { Table } from '../components/Table'
 export default function Reports(){
   const s = useStore()
   
-  // Accounts Payable - Updated to use totalPurchaseValue from new lot structure
+  // Accounts Payable - Updated for enhanced schema
   const apRows = s.lots.map(l => {
-    const paid = s.purchasePayments.filter(p=>p.lotId===l.id).reduce((a,b)=>a+b.amount,0)
-    const balance = (l.totalPurchaseValue||0) - paid
+    const lotItems = s.lotItems.filter(li => li.lot_id === l.lot_id)
+    const totalPurchaseValue = lotItems.reduce((sum, li) => sum + li.total_purchase_value, 0)
+    const paid = s.purchasePayments.filter(p=>p.lot_id===l.lot_id).reduce((a,b)=>a+b.amount_paid,0)
+    const balance = totalPurchaseValue - paid
     return {
-      farmer: s.farmers.find(f=>f.id===l.farmerId)?.name || '-',
-      lot: l.lotNumber,
-      purchaseDate: l.purchaseDate,
-      total: l.totalPurchaseValue||0,
+      farmer: s.farmers.find(f=>f.farmer_id===l.farmer_id)?.auction_name || '-',
+      lot: l.lot_number,
+      purchaseDate: l.purchase_date,
+      total: totalPurchaseValue,
       paid, balance
     }
   })
 
-  // Accounts Receivable - No changes needed, already working correctly
+  // Accounts Receivable - Updated for enhanced schema
   const arRows = s.salesOrders.map(o => {
-    const items = s.pickListItems.filter(p=>p.salesOrderId===o.id)
-    const saleValue = items.reduce((a,p)=> a + ((p.actual_total_kg||0) * (p.saleRate||0)), 0)
-    const paid = s.salesPayments.filter(sp=>sp.salesOrderId===o.id).reduce((a,b)=>a+b.amount,0)
+    const items = s.picklistItems.filter(p=>p.order_id===o.order_id)
+    const saleValue = items.reduce((a,p)=> a + ((p.actual_total_kg||0) * (p.sale_rate_per_kg||0)), 0)
+    const paid = s.salesPayments.filter(sp=>sp.order_id===o.order_id).reduce((a,b)=>a+b.amount_paid,0)
     const balance = saleValue - paid
     return {
-      customer: s.customers.find(c=>c.id===o.customerId)?.name || '-',
-      order: o.id.slice(0,8),
-      orderDate: o.orderDate,
+      customer: s.customers.find(c=>c.customer_id===o.customer_id)?.company_name || '-',
+      order: o.order_id.slice(0,8),
+      orderDate: o.order_date,
       total: saleValue,
       paid, balance
     }
   })
   
-  // NEW: Product-wise inventory report
+  // Product-wise inventory report - Updated for enhanced schema
   const inventoryRows = s.products.map(product => {
-    const productLots = s.lotProducts.filter(lp => lp.productId === product.id)
-    const totalStock = productLots.reduce((sum, lp) => sum + lp.currentTotalKg, 0)
-    const totalValue = productLots.reduce((sum, lp) => sum + (lp.currentTotalKg * lp.purchaseRate), 0)
+    const productLotItems = s.lotItems.filter(li => li.product_id === product.product_id)
+    const totalStock = productLotItems.reduce((sum, li) => sum + li.current_total_kg, 0)
+    const totalValue = productLotItems.reduce((sum, li) => sum + (li.current_total_kg * li.purchase_rate_per_kg), 0)
     const avgPurchaseRate = totalStock > 0 ? totalValue / totalStock : 0
-    const lotsCount = productLots.filter(lp => lp.currentTotalKg > 0).length
+    const lotsCount = productLotItems.filter(li => li.current_total_kg > 0).length
     
     return {
-      productName: product.name,
+      productName: product.product_name,
       totalStock: totalStock,
       totalValue: totalValue,
       avgPurchaseRate: avgPurchaseRate,
@@ -50,24 +52,25 @@ export default function Reports(){
     }
   }).filter(row => row.totalStock > 0) // Only show products with stock
   
-  // NEW: Lot-wise detailed inventory
+  // Lot-wise detailed inventory - Updated for enhanced schema
   const lotInventoryRows = s.lots.map(lot => {
-    const farmer = s.farmers.find(f => f.id === lot.farmerId)
-    const warehouse = s.warehouses.find(w => w.id === lot.warehouseId)
-    const lotProducts = s.lotProducts.filter(lp => lp.lotId === lot.id && lp.currentTotalKg > 0)
+    const farmer = s.farmers.find(f => f.farmer_id === lot.farmer_id)
+    const lotItems = s.lotItems.filter(li => li.lot_id === lot.lot_id && li.current_total_kg > 0)
     
-    return lotProducts.map(lp => {
-      const product = s.products.find(p => p.id === lp.productId)
+    return lotItems.map(li => {
+      const product = s.products.find(p => p.product_id === li.product_id)
+      const warehouse = s.warehouses.find(w => w.warehouse_id === li.warehouse_id)
       return {
-        lotNumber: lot.lotNumber,
-        farmer: farmer?.name || 'Unknown',
-        warehouse: warehouse?.name || 'Unknown',
-        productName: product?.name || 'Unknown Product',
-        currentStock: lp.currentTotalKg,
-        initialStock: lp.initialTotalKg,
-        purchaseRate: lp.purchaseRate,
-        currentValue: lp.currentTotalKg * lp.purchaseRate,
-        purchaseDate: lot.purchaseDate
+        lotNumber: lot.lot_number,
+        farmer: farmer?.auction_name || 'Unknown',
+        warehouse: warehouse?.warehouse_name || 'Unknown',
+        productName: product?.product_name || 'Unknown Product',
+        currentStock: li.current_total_kg,
+        initialStock: li.initial_total_kg,
+        purchaseRate: li.purchase_rate_per_kg,
+        currentValue: li.current_total_kg * li.purchase_rate_per_kg,
+        purchaseDate: lot.purchase_date,
+        bayNumber: li.bay_number || '-'
       }
     })
   }).flat().filter(row => row.currentStock > 0)
@@ -97,6 +100,7 @@ export default function Reports(){
           {header:'Purchase Rate', render:r=>`₹${r.purchaseRate.toFixed(2)}/kg`},
           {header:'Current Value', render:r=>`₹${r.currentValue.toFixed(2)}`},
           {header:'Warehouse', key:'warehouse'},
+          {header:'Bay #', key:'bayNumber'},
           {header:'Purchase Date', key:'purchaseDate'},
         ]} rows={lotInventoryRows} />
       </div>

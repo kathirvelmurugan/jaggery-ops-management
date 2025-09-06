@@ -7,21 +7,21 @@ import { useState } from 'react'
 
 export default function Payments(){
   const s = useStore()
-  const [pp, setPP] = useState({ lotId:'', amount:0, method:'Cash', ref:'' })
-  const [sp, setSP] = useState({ salesOrderId:'', amount:0, method:'Cash', ref:'' })
+  const [pp, setPP] = useState({ lot_id:'', amount:0, method:'Cash', ref:'' })
+  const [sp, setSP] = useState({ order_id:'', amount:0, method:'Cash', ref:'' })
 
   const lots = s.lots
   const orders = s.salesOrders
   
   // Calculate payment summaries
-  const totalPurchasePayments = s.purchasePayments.reduce((sum, p) => sum + Number(p.amount), 0)
-  const totalSalesPayments = s.salesPayments.reduce((sum, p) => sum + Number(p.amount), 0)
+  const totalPurchasePayments = s.purchasePayments.reduce((sum, p) => sum + Number(p.amount_paid), 0)
+  const totalSalesPayments = s.salesPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0)
   const totalCashPayments = [...s.purchasePayments, ...s.salesPayments]
-    .filter(p => p.method === 'Cash')
-    .reduce((sum, p) => sum + Number(p.amount), 0)
+    .filter(p => p.payment_method === 'Cash')
+    .reduce((sum, p) => sum + Number(p.amount_paid), 0)
   const totalRTGSPayments = [...s.purchasePayments, ...s.salesPayments]
-    .filter(p => p.method === 'RTGS')
-    .reduce((sum, p) => sum + Number(p.amount), 0)
+    .filter(p => p.payment_method === 'RTGS')
+    .reduce((sum, p) => sum + Number(p.amount_paid), 0)
 
   return (
     <div className="grid">
@@ -55,13 +55,13 @@ export default function Payments(){
         <h2>Purchase Payments</h2>
         <div className="grid grid-3">
           <Field label="Lot">
-            <select value={pp.lotId} onChange={e=>setPP({...pp, lotId:e.target.value})}>
+            <select value={pp.lot_id} onChange={e=>setPP({...pp, lot_id:e.target.value})}>
               <option value="">Select Lot</option>
               {lots.map(l => {
-                const farmer = s.farmers.find(f => f.id === l.farmerId)
+                const farmer = s.farmers.find(f => f.farmer_id === l.farmer_id)
                 return (
-                  <option key={l.id} value={l.id}>
-                    {l.lotNumber} - {farmer?.name || 'Unknown Farmer'}
+                  <option key={l.lot_id} value={l.lot_id}>
+                    {l.lot_number} - {farmer?.auction_name || 'Unknown Farmer'}
                   </option>
                 )
               })}
@@ -74,9 +74,9 @@ export default function Payments(){
           <Field label="Ref/Notes"><input value={pp.ref} onChange={e=>setPP({...pp, ref:e.target.value})} /></Field>
         </div>
         <Button className="primary" onClick={()=>{
-          if(!pp.lotId || !pp.amount) return alert('Select lot and amount')
-          s.addPurchasePayment({...pp, paymentDate: new Date().toISOString().slice(0,10), reference: pp.ref})
-          setPP({ lotId:'', amount:0, method:'Cash', ref:'' }) // Reset form
+          if(!pp.lot_id || !pp.amount) return alert('Select lot and amount')
+          s.addPurchasePayment({...pp, payment_date: new Date().toISOString().slice(0,10), reference_details: pp.ref})
+          setPP({ lot_id:'', amount:0, method:'Cash', ref:'' }) // Reset form
           alert('Purchase payment recorded')
         }}>Save</Button>
 
@@ -84,19 +84,19 @@ export default function Payments(){
         <Table
           columns={[
             {header:'Lot Number', render:r=> {
-              const lot = s.lots.find(l=>l.id===r.lotId)
-              return lot?.lotNumber || 'N/A'
+              const lot = s.lots.find(l=>l.lot_id===r.lot_id)
+              return lot?.lot_number || 'N/A'
             }},
             {header:'Farmer', render:r=> {
-              const lot = s.lots.find(l=>l.id===r.lotId)
-              const farmer = s.farmers.find(f => f.id === lot?.farmerId)
-              return farmer?.name || 'Unknown'
+              const lot = s.lots.find(l=>l.lot_id===r.lot_id)
+              const farmer = s.farmers.find(f => f.farmer_id === lot?.farmer_id)
+              return farmer?.auction_name || 'Unknown'
             }},
-            {header:'Amount', render:r=> `₹${Number(r.amount).toFixed(2)}`},
-            {header:'Method', key:'method'},
-            {header:'Reference', render:r=> r.reference || r.ref || '-'},
+            {header:'Amount', render:r=> `₹${Number(r.amount_paid).toFixed(2)}`},
+            {header:'Method', key:'payment_method'},
+            {header:'Reference', render:r=> r.reference_details || r.ref || '-'},
             {header:'Date', render:r=> {
-              const date = r.paymentDate || r.createdAt
+              const date = r.payment_date || r.createdAt
               return date ? new Date(date).toLocaleDateString() : '-'
             }},
           ]}
@@ -108,13 +108,13 @@ export default function Payments(){
         <h2>Sales Payments</h2>
         <div className="grid grid-3">
           <Field label="Sales Order">
-            <select value={sp.salesOrderId} onChange={e=>setSP({...sp, salesOrderId:e.target.value})}>
+            <select value={sp.order_id} onChange={e=>setSP({...sp, order_id:e.target.value})}>
               <option value="">Select Sales Order</option>
               {orders.map(o => {
-                const customer = s.customers.find(c => c.id === o.customerId)
+                const customer = s.customers.find(c => c.customer_id === o.customer_id)
                 return (
-                  <option key={o.id} value={o.id}>
-                    {o.id.slice(0,8)} - {customer?.name || 'Unknown Customer'}
+                  <option key={o.order_id} value={o.order_id}>
+                    {o.order_id.slice(0,8)} - {customer?.company_name || 'Unknown Customer'}
                   </option>
                 )
               })}
@@ -127,26 +127,26 @@ export default function Payments(){
           <Field label="Ref/Notes"><input value={sp.ref} onChange={e=>setSP({...sp, ref:e.target.value})} /></Field>
         </div>
         <Button className="primary" onClick={()=>{
-          if(!sp.salesOrderId || !sp.amount) return alert('Select Sales Order and amount')
-          s.addSalesPayment({...sp, paymentDate: new Date().toISOString().slice(0,10), reference: sp.ref})
-          setSP({ salesOrderId:'', amount:0, method:'Cash', ref:'' }) // Reset form
+          if(!sp.order_id || !sp.amount) return alert('Select Sales Order and amount')
+          s.addSalesPayment({...sp, payment_date: new Date().toISOString().slice(0,10), reference_details: sp.ref})
+          setSP({ order_id:'', amount:0, method:'Cash', ref:'' }) // Reset form
           alert('Sales payment recorded')
         }}>Save</Button>
 
         <hr />
         <Table
           columns={[
-            {header:'Order ID', render:r=> (r.salesOrderId||'').slice(0,8) },
+            {header:'Order ID', render:r=> (r.order_id||'').slice(0,8) },
             {header:'Customer', render:r=> {
-              const order = s.salesOrders.find(o => o.id === r.salesOrderId)
-              const customer = s.customers.find(c => c.id === order?.customerId)
-              return customer?.name || 'Unknown'
+              const order = s.salesOrders.find(o => o.order_id === r.order_id)
+              const customer = s.customers.find(c => c.customer_id === order?.customer_id)
+              return customer?.company_name || 'Unknown'
             }},
-            {header:'Amount', render:r=> `₹${Number(r.amount).toFixed(2)}`},
-            {header:'Method', key:'method'},
-            {header:'Reference', render:r=> r.reference || r.ref || '-'},
+            {header:'Amount', render:r=> `₹${Number(r.amount_paid).toFixed(2)}`},
+            {header:'Method', key:'payment_method'},
+            {header:'Reference', render:r=> r.reference_details || r.ref || '-'},
             {header:'Date', render:r=> {
-              const date = r.paymentDate || r.createdAt
+              const date = r.payment_date || r.createdAt
               return date ? new Date(date).toLocaleDateString() : '-'
             }},
           ]}

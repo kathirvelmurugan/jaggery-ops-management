@@ -2,23 +2,23 @@ import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import { db, handleSupabaseError } from '../lib/supabase'
 
-// Initial state structure
+// Initial state structure for enhanced schema
 const initialState = {
   // Meta/Settings
   meta: { sippamKgDefault: 30 },
   
-  // Master data
+  // Master data (enhanced schema)
   products: [],
   warehouses: [],
   farmers: [],
   customers: [],
   
-  // Operational data
-  lots: [],
-  lotProducts: [],
+  // Operational data (normalized structure)
+  lots: [], // Header records only
+  lotItems: [], // Individual product items within lots
   purchasePayments: [],
   salesOrders: [],
-  pickListItems: [],
+  picklistItems: [], // Updated naming
   dispatchConfirmations: [],
   salesPayments: [],
   
@@ -43,7 +43,7 @@ export const useStore = create((set, get) => ({
     try {
       set({ loading: true })
       
-      // Load all data in parallel
+      // Load all master data in parallel
       const [productsRes, farmersRes, customersRes, warehousesRes] = await Promise.all([
         db.products.getAll(),
         db.farmers.getAll(),
@@ -52,68 +52,29 @@ export const useStore = create((set, get) => ({
       ])
       
       // Load operational data
-      const [lotsRes, lotProductsRes, purchasePaymentsRes, salesOrdersRes, pickListItemsRes] = await Promise.all([
+      const [lotsRes, lotItemsRes, purchasePaymentsRes, salesOrdersRes, picklistItemsRes] = await Promise.all([
         db.lots.getAll(),
-        db.lotProducts.getAll(),
+        db.lotItems.getAll(),
         db.purchasePayments.getAll(),
         db.salesOrders.getAll(),
-        db.pickListItems.getAll(),
+        db.picklistItems.getAll(),
       ])
       
-      // Update store with data, mapping database field names to frontend field names
+      // Update store with enhanced schema data
       set({
+        // Master data - direct mapping for enhanced schema
         products: productsRes.data || [],
         farmers: farmersRes.data || [],
         customers: customersRes.data || [],
         warehouses: warehousesRes.data || [],
-        lots: (lotsRes.data || []).map(lot => ({
-          ...lot,
-          lotNumber: lot.lot_number,
-          farmerId: lot.farmer_id,
-          warehouseId: lot.warehouse_id,
-          purchaseDate: lot.purchase_date,
-          bayNumber: lot.bay_number,
-          totalPurchaseValue: lot.total_purchase_value,
-          createdAt: lot.created_at,
-        })),
-        lotProducts: (lotProductsRes.data || []).map(lp => ({
-          ...lp,
-          lotId: lp.lot_id,
-          productId: lp.product_id,
-          numBags: lp.num_bags,
-          looseKg: lp.loose_kg,
-          sippamKg: lp.sippam_kg,
-          purchaseRate: lp.purchase_rate,
-          initialTotalKg: lp.initial_total_kg,
-          currentTotalKg: lp.current_total_kg,
-          productValue: lp.product_value,
-        })),
-        purchasePayments: (purchasePaymentsRes.data || []).map(pp => ({
-          ...pp,
-          lotId: pp.lot_id,
-          paymentDate: pp.payment_date,
-          createdAt: pp.created_at,
-        })),
-        salesOrders: (salesOrdersRes.data || []).map(so => ({
-          ...so,
-          customerId: so.customer_id,
-          orderDate: so.order_date,
-          createdAt: so.created_at,
-        })),
-        pickListItems: (pickListItemsRes.data || []).map(pli => ({
-          ...pli,
-          salesOrderId: pli.sales_order_id,
-          lotId: pli.lot_id,
-          lotProductId: pli.lot_product_id,
-          customerMark: pli.customer_mark,
-          plannedBags: pli.planned_bags,
-          plannedLooseKg: pli.planned_loose_kg,
-          saleRate: pli.sale_rate,
-          packagingType: pli.packaging_type,
-          actualBags: pli.actual_bags,
-          actualLooseKg: pli.actual_loose_kg,
-          actualTotalKg: pli.actual_total_kg,
-        })),
+        
+        // Operational data - enhanced schema
+        lots: lotsRes.data || [],
+        lotItems: lotItemsRes.data || [],
+        purchasePayments: purchasePaymentsRes.data || [],
+        salesOrders: salesOrdersRes.data || [],
+        picklistItems: picklistItemsRes.data || [],
+        
         initialized: true,
         loading: false,
       })
@@ -128,7 +89,7 @@ export const useStore = create((set, get) => ({
   },
 
   // =============================================================================
-  // GENERIC CRUD OPERATIONS
+  // GENERIC CRUD OPERATIONS FOR ENHANCED SCHEMA
   // =============================================================================
   
   addItem: async (key, item) => {
@@ -148,15 +109,32 @@ export const useStore = create((set, get) => ({
     }
   },
   
-  updateItem: async (key, id, patch) => {
+  updateItem: async (key, idField, id, patch) => {
     try {
-      const result = await db[key].update(id, patch)
+      // Map table keys to their corresponding update functions
+      const updateFunctions = {
+        products: (id, patch) => db.products.update(id, patch),
+        farmers: (id, patch) => db.farmers.update(id, patch),
+        customers: (id, patch) => db.customers.update(id, patch),
+        warehouses: (id, patch) => db.warehouses.update(id, patch),
+        lots: (id, patch) => db.lots.update(id, patch),
+        lotItems: (id, patch) => db.lotItems.update(id, patch),
+        purchasePayments: (id, patch) => db.purchasePayments.update(id, patch),
+        salesOrders: (id, patch) => db.salesOrders.update(id, patch),
+        picklistItems: (id, patch) => db.picklistItems.update(id, patch),
+        salesPayments: (id, patch) => db.salesPayments.update(id, patch),
+      }
+      
+      const updateFn = updateFunctions[key]
+      if (!updateFn) throw new Error(`No update function for ${key}`)
+      
+      const result = await updateFn(id, patch)
       if (result.error) throw result.error
       
       const currentItems = get()[key]
       set({ 
         [key]: currentItems.map(item => 
-          item.id === id ? { ...item, ...result.data } : item
+          item[idField] === id ? { ...item, ...result.data } : item
         )
       })
       return result.data
@@ -169,13 +147,30 @@ export const useStore = create((set, get) => ({
     }
   },
   
-  removeItem: async (key, id) => {
+  removeItem: async (key, idField, id) => {
     try {
-      const result = await db[key].delete(id)
+      // Map table keys to their corresponding delete functions
+      const deleteFunctions = {
+        products: (id) => db.products.delete(id),
+        farmers: (id) => db.farmers.delete(id),
+        customers: (id) => db.customers.delete(id),
+        warehouses: (id) => db.warehouses.delete(id),
+        lots: (id) => db.lots.delete(id),
+        lotItems: (id) => db.lotItems.delete(id),
+        purchasePayments: (id) => db.purchasePayments.delete(id),
+        salesOrders: (id) => db.salesOrders.delete(id),
+        picklistItems: (id) => db.picklistItems.delete(id),
+        salesPayments: (id) => db.salesPayments.delete(id),
+      }
+      
+      const deleteFn = deleteFunctions[key]
+      if (!deleteFn) throw new Error(`No delete function for ${key}`)
+      
+      const result = await deleteFn(id)
       if (result.error) throw result.error
       
       const currentItems = get()[key]
-      set({ [key]: currentItems.filter(item => item.id !== id) })
+      set({ [key]: currentItems.filter(item => item[idField] !== id) })
       
     } catch (error) {
       set({ 
@@ -186,96 +181,61 @@ export const useStore = create((set, get) => ({
   },
 
   // =============================================================================
-  // DOMAIN-SPECIFIC OPERATIONS
+  // DOMAIN-SPECIFIC OPERATIONS FOR ENHANCED SCHEMA
   // =============================================================================
   
-  // Lot operations
+  // Lot operations with normalized structure
   addLot: async (lotData) => {
     try {
       // Check for duplicate lot number
-      const existingCheck = await db.lots.getByNumber(lotData.lotNumber)
+      const existingCheck = await db.lots.getByNumber(lotData.lot_number)
       if (existingCheck.data && existingCheck.data.length > 0) {
-        throw new Error(`Lot number '${lotData.lotNumber}' already exists. Please use a unique lot number.`)
+        throw new Error(`Lot number '${lotData.lot_number}' already exists. Please use a unique lot number.`)
       }
       
-      // Calculate total purchase value
-      let totalPurchaseValue = 0
-      const productsToCreate = []
-      
-      if (lotData.products && lotData.products.length > 0) {
-        lotData.products.forEach(product => {
-          const sippamKg = Number(product.sippamKg || get().meta.sippamKgDefault || 30)
-          const initialTotalKg = Number(product.numBags || 0) * sippamKg + Number(product.looseKg || 0)
-          const productValue = initialTotalKg * Number(product.purchaseRate || 0)
-          totalPurchaseValue += productValue
-          
-          productsToCreate.push({
-            product_id: product.productId,
-            num_bags: Number(product.numBags || 0),
-            loose_kg: Number(product.looseKg || 0),
-            sippam_kg: sippamKg,
-            purchase_rate: Number(product.purchaseRate || 0),
-            current_total_kg: initialTotalKg,
-          })
-        })
-      }
-      
-      // Create lot record
+      // Create lot header record (normalized structure)
       const lotRecord = {
-        lot_number: lotData.lotNumber,
-        farmer_id: lotData.farmerId,
-        warehouse_id: lotData.warehouseId,
-        purchase_date: lotData.purchaseDate,
-        bay_number: lotData.bayNumber,
-        total_purchase_value: totalPurchaseValue,
+        lot_number: lotData.lot_number,
+        farmer_id: lotData.farmer_id,
+        purchase_date: lotData.purchase_date,
       }
       
       const lotResult = await db.lots.create(lotRecord)
       if (lotResult.error) throw lotResult.error
       
-      // Create lot products
-      if (productsToCreate.length > 0) {
-        const lotProductsWithLotId = productsToCreate.map(product => ({
-          ...product,
-          lot_id: lotResult.data.id,
-        }))
+      // Create lot items if provided
+      if (lotData.lotItems && lotData.lotItems.length > 0) {
+        const lotItemsWithLotId = lotData.lotItems.map(item => {
+          const initialTotalKg = Number(item.initial_bags || 0) * 30 + Number(item.initial_loose_kg || 0)
+          const totalPurchaseValue = initialTotalKg * Number(item.purchase_rate_per_kg || 0)
+          
+          return {
+            lot_id: lotResult.data.lot_id,
+            product_id: item.product_id,
+            warehouse_id: item.warehouse_id,
+            bay_number: item.bay_number || null,
+            initial_bags: Number(item.initial_bags || 0),
+            initial_loose_kg: Number(item.initial_loose_kg || 0),
+            initial_total_kg: initialTotalKg,
+            current_total_kg: initialTotalKg,
+            purchase_rate_per_kg: Number(item.purchase_rate_per_kg || 0),
+            total_purchase_value: totalPurchaseValue,
+          }
+        })
         
-        const lotProductsResult = await db.lotProducts.bulkCreate(lotProductsWithLotId)
-        if (lotProductsResult.error) throw lotProductsResult.error
+        const lotItemsResult = await db.lotItems.bulkCreate(lotItemsWithLotId)
+        if (lotItemsResult.error) throw lotItemsResult.error
         
         // Update local state
-        const currentLotProducts = get().lotProducts
-        const newLotProducts = (lotProductsResult.data || []).map(lp => ({
-          ...lp,
-          lotId: lp.lot_id,
-          productId: lp.product_id,
-          numBags: lp.num_bags,
-          looseKg: lp.loose_kg,
-          sippamKg: lp.sippam_kg,
-          purchaseRate: lp.purchase_rate,
-          initialTotalKg: lp.initial_total_kg,
-          currentTotalKg: lp.current_total_kg,
-          productValue: lp.product_value,
-        }))
-        
-        set({ lotProducts: [...currentLotProducts, ...newLotProducts] })
+        const currentLotItems = get().lotItems
+        set({ lotItems: [...currentLotItems, ...(lotItemsResult.data || [])] })
       }
       
       // Update lots in state
       const currentLots = get().lots
-      const newLot = {
-        ...lotResult.data,
-        lotNumber: lotResult.data.lot_number,
-        farmerId: lotResult.data.farmer_id,
-        warehouseId: lotResult.data.warehouse_id,
-        purchaseDate: lotResult.data.purchase_date,
-        bayNumber: lotResult.data.bay_number,
-        totalPurchaseValue: lotResult.data.total_purchase_value,
-        createdAt: lotResult.data.created_at,
-      }
-      set({ lots: [...currentLots, newLot] })
+      set({ lots: [...currentLots, lotResult.data] })
       
-      return newLot
+      return lotResult.data
       
     } catch (error) {
       set({ 
@@ -288,26 +248,20 @@ export const useStore = create((set, get) => ({
   addPurchasePayment: async (payment) => {
     try {
       const paymentData = {
-        lot_id: payment.lotId,
-        amount: Number(payment.amount || 0),
-        payment_date: payment.paymentDate,
-        method: payment.method,
-        reference: payment.reference,
+        lot_id: payment.lot_id,
+        amount_paid: Number(payment.amount_paid || 0),
+        payment_date: payment.payment_date,
+        payment_method: payment.payment_method,
+        reference_details: payment.reference_details,
       }
       
       const result = await db.purchasePayments.create(paymentData)
       if (result.error) throw result.error
       
       const currentPayments = get().purchasePayments
-      const newPayment = {
-        ...result.data,
-        lotId: result.data.lot_id,
-        paymentDate: result.data.payment_date,
-        createdAt: result.data.created_at,
-      }
-      set({ purchasePayments: [...currentPayments, newPayment] })
+      set({ purchasePayments: [...currentPayments, result.data] })
       
-      return newPayment
+      return result.data
       
     } catch (error) {
       set({ 
@@ -320,8 +274,8 @@ export const useStore = create((set, get) => ({
   addSalesOrder: async (so) => {
     try {
       const orderData = {
-        customer_id: so.customerId,
-        order_date: so.orderDate,
+        customer_id: so.customer_id,
+        order_date: so.order_date,
         notes: so.notes || '',
       }
       
@@ -329,15 +283,9 @@ export const useStore = create((set, get) => ({
       if (result.error) throw result.error
       
       const currentOrders = get().salesOrders
-      const newOrder = {
-        ...result.data,
-        customerId: result.data.customer_id,
-        orderDate: result.data.order_date,
-        createdAt: result.data.created_at,
-      }
-      set({ salesOrders: [...currentOrders, newOrder] })
+      set({ salesOrders: [...currentOrders, result.data] })
       
-      return newOrder
+      return result.data
       
     } catch (error) {
       set({ 
@@ -350,87 +298,70 @@ export const useStore = create((set, get) => ({
   addPickItem: async (pi) => {
     try {
       const itemData = {
-        sales_order_id: pi.salesOrderId,
-        lot_id: pi.lotId,
-        lot_product_id: pi.lotProductId,
-        customer_mark: pi.customerMark || '',
-        planned_bags: Number(pi.plannedBags || 0),
-        planned_loose_kg: Number(pi.plannedLooseKg || 0),
-        sale_rate: Number(pi.saleRate || 0),
-        packaging_type: pi.packagingType || 'Bag',
+        order_id: pi.order_id,
+        lot_item_id: pi.lot_item_id, // Now links to specific lot item
+        customer_mark: pi.customer_mark,
+        planned_bags: Number(pi.planned_bags || 0),
+        planned_loose_kg: Number(pi.planned_loose_kg || 0),
+        sale_rate_per_kg: Number(pi.sale_rate_per_kg || 0),
+        packaging_type: pi.packaging_type || 'Bag',
       }
       
-      const result = await db.pickListItems.create(itemData)
+      const result = await db.picklistItems.create(itemData)
       if (result.error) throw result.error
       
-      // Update sales order status
-      await get().updateSalesOrderStatus(pi.salesOrderId, 'Packing in Progress')
+      const currentItems = get().picklistItems
+      set({ picklistItems: [...currentItems, result.data] })
       
-      const currentItems = get().pickListItems
-      const newItem = {
-        ...result.data,
-        salesOrderId: result.data.sales_order_id,
-        lotId: result.data.lot_id,
-        lotProductId: result.data.lot_product_id,
-        customerMark: result.data.customer_mark,
-        plannedBags: result.data.planned_bags,
-        plannedLooseKg: result.data.planned_loose_kg,
-        saleRate: result.data.sale_rate,
-        packagingType: result.data.packaging_type,
-      }
-      set({ pickListItems: [...currentItems, newItem] })
-      
-      return newItem
+      return result.data
       
     } catch (error) {
       set({ 
-        errors: { ...get().errors, pickListItems: handleSupabaseError(error, 'adding pick item') }
+        errors: { ...get().errors, picklistItems: handleSupabaseError(error, 'adding pick item') }
       })
       throw error
     }
   },
-
   confirmPack: async ({ pickItemId, actualBags, actualLooseKg }) => {
     try {
-      const pi = get().pickListItems.find(p => p.id === pickItemId)
+      const pi = get().picklistItems.find(p => p.picklist_item_id === pickItemId)
       if (!pi) throw new Error('Pick item not found')
       
-      const lotProduct = get().lotProducts.find(lp => lp.id === pi.lotProductId)
-      if (!lotProduct) throw new Error('Lot product not found')
+      const lotItem = get().lotItems.find(li => li.lot_item_id === pi.lot_item_id)
+      if (!lotItem) throw new Error('Lot item not found')
       
-      const sippamKg = Number(lotProduct.sippamKg || get().meta.sippamKgDefault || 30)
+      const sippamKg = 30 // Default sippam weight
       const actualTotalKg = Number(actualBags || 0) * sippamKg + Number(actualLooseKg || 0)
       
-      // Update lot product quantity
-      const newCurrentKg = Math.max(0, lotProduct.currentTotalKg - actualTotalKg)
-      await db.lotProducts.update(lotProduct.id, { current_total_kg: newCurrentKg })
+      // Update lot item quantity
+      const newCurrentKg = Math.max(0, lotItem.current_total_kg - actualTotalKg)
+      await db.lotItems.update(lotItem.lot_item_id, { current_total_kg: newCurrentKg })
       
       // Update pick item status
-      await db.pickListItems.update(pickItemId, {
-        status: 'Packed',
+      await db.picklistItems.update(pickItemId, {
+        status: 'Packed'
+      })
+      
+      // Create dispatch confirmation
+      await db.dispatchConfirmations.create({
+        picklist_item_id: pickItemId,
         actual_bags: Number(actualBags || 0),
         actual_loose_kg: Number(actualLooseKg || 0),
         actual_total_kg: actualTotalKg,
       })
       
       // Update local state
-      const currentLotProducts = get().lotProducts
+      const currentLotItems = get().lotItems
       set({
-        lotProducts: currentLotProducts.map(lp => 
-          lp.id === lotProduct.id ? { ...lp, currentTotalKg: newCurrentKg } : lp
+        lotItems: currentLotItems.map(li => 
+          li.lot_item_id === lotItem.lot_item_id ? { ...li, current_total_kg: newCurrentKg } : li
         )
       })
       
-      const currentPickItems = get().pickListItems
+      const currentPickItems = get().picklistItems
       set({
-        pickListItems: currentPickItems.map(p => 
-          p.id === pickItemId ? { 
-            ...p, 
-            status: 'Packed',
-            actualBags: Number(actualBags || 0),
-            actualLooseKg: Number(actualLooseKg || 0),
-            actualTotalKg,
-          } : p
+        picklistItems: currentPickItems.map(p => 
+          p.picklist_item_id === pickItemId ? { ...p, status: 'Packed' } : p
         )
       })
       
@@ -447,26 +378,20 @@ export const useStore = create((set, get) => ({
   addSalesPayment: async (payment) => {
     try {
       const paymentData = {
-        sales_order_id: payment.salesOrderId,
-        amount: Number(payment.amount || 0),
-        payment_date: payment.paymentDate,
-        method: payment.method,
-        reference: payment.reference,
+        order_id: payment.order_id,
+        amount_paid: Number(payment.amount_paid || 0),
+        payment_date: payment.payment_date,
+        payment_method: payment.payment_method,
+        reference_details: payment.reference_details,
       }
       
       const result = await db.salesPayments.create(paymentData)
       if (result.error) throw result.error
       
       const currentPayments = get().salesPayments
-      const newPayment = {
-        ...result.data,
-        salesOrderId: result.data.sales_order_id,
-        paymentDate: result.data.payment_date,
-        createdAt: result.data.created_at,
-      }
-      set({ salesPayments: [...currentPayments, newPayment] })
+      set({ salesPayments: [...currentPayments, result.data] })
       
-      return newPayment
+      return result.data
       
     } catch (error) {
       set({ 
@@ -476,7 +401,7 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // Helper methods
+  // Helper methods for enhanced schema
   updateSalesOrderStatus: async (orderId, status) => {
     try {
       await db.salesOrders.update(orderId, { status })
@@ -484,7 +409,7 @@ export const useStore = create((set, get) => ({
       const currentOrders = get().salesOrders
       set({
         salesOrders: currentOrders.map(so => 
-          so.id === orderId ? { ...so, status } : so
+          so.order_id === orderId ? { ...so, status } : so
         )
       })
       
@@ -493,14 +418,50 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // Settings
+  // Enhanced schema utility methods
+  getLotWithItems: async (lotId) => {
+    try {
+      const result = await db.queries.getLotWithItems(lotId)
+      if (result.error) throw result.error
+      return result.data
+    } catch (error) {
+      console.error('Error getting lot with items:', error)
+      throw error
+    }
+  },
+
+  getAvailableInventory: async () => {
+    try {
+      const result = await db.lotItems.getAvailableInventory()
+      if (result.error) throw result.error
+      return result.data || []
+    } catch (error) {
+      console.error('Error getting available inventory:', error)
+      throw error
+    }
+  },
+
+  getPackingQueue: async () => {
+    try {
+      const result = await db.picklistItems.getPackingQueue()
+      if (result.error) throw result.error
+      return result.data || []
+    } catch (error) {
+      console.error('Error getting packing queue:', error)
+      throw error
+    }
+  },
+
+  // Settings for enhanced schema
   setMeta: async (patch) => {
     try {
       const currentMeta = get().meta
       const newMeta = { ...currentMeta, ...patch }
       
       await db.settings.upsert({
-        sippam_kg_default: newMeta.sippamKgDefault,
+        setting_key: 'sippam_kg_default',
+        setting_value: String(newMeta.sippamKgDefault),
+        description: 'Default weight of one sippam/bag in kg'
       })
       
       set({ meta: newMeta })
@@ -518,5 +479,10 @@ export const useStore = create((set, get) => ({
     const errors = { ...get().errors }
     delete errors[key]
     set({ errors })
+  },
+
+  // Reset store to initial state
+  resetStore: () => {
+    set(initialState)
   },
 }))

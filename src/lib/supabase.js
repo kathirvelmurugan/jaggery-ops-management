@@ -19,110 +19,220 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
-// Database service layer for type safety and consistency
+// Database service layer for enhanced schema with normalized structure
 export const db = {
-  // Products
+  // Products (Updated for enhanced schema)
   products: {
-    getAll: () => supabase.from('products').select('*').order('name'),
+    getAll: () => supabase.from('products').select('*').order('product_name'),
     create: (product) => supabase.from('products').insert(product).select().single(),
-    update: (id, updates) => supabase.from('products').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('products').delete().eq('id', id),
+    update: (productId, updates) => supabase.from('products').update(updates).eq('product_id', productId).select().single(),
+    delete: (productId) => supabase.from('products').delete().eq('product_id', productId),
   },
 
-  // Farmers
+  // Farmers (Updated for enhanced schema)
   farmers: {
-    getAll: () => supabase.from('farmers').select('*').order('name'),
+    getAll: () => supabase.from('farmers').select('*').order('auction_name'),
     create: (farmer) => supabase.from('farmers').insert(farmer).select().single(),
-    update: (id, updates) => supabase.from('farmers').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('farmers').delete().eq('id', id),
+    update: (farmerId, updates) => supabase.from('farmers').update(updates).eq('farmer_id', farmerId).select().single(),
+    delete: (farmerId) => supabase.from('farmers').delete().eq('farmer_id', farmerId),
   },
 
-  // Customers
+  // Customers (Updated for enhanced schema)
   customers: {
-    getAll: () => supabase.from('customers').select('*').order('name'),
+    getAll: () => supabase.from('customers').select('*').order('company_name'),
     create: (customer) => supabase.from('customers').insert(customer).select().single(),
-    update: (id, updates) => supabase.from('customers').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('customers').delete().eq('id', id),
+    update: (customerId, updates) => supabase.from('customers').update(updates).eq('customer_id', customerId).select().single(),
+    delete: (customerId) => supabase.from('customers').delete().eq('customer_id', customerId),
   },
 
-  // Warehouses
+  // Warehouses (Updated for enhanced schema)
   warehouses: {
-    getAll: () => supabase.from('warehouses').select('*').order('name'),
+    getAll: () => supabase.from('warehouses').select('*').order('warehouse_name'),
     create: (warehouse) => supabase.from('warehouses').insert(warehouse).select().single(),
-    update: (id, updates) => supabase.from('warehouses').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('warehouses').delete().eq('id', id),
+    update: (warehouseId, updates) => supabase.from('warehouses').update(updates).eq('warehouse_id', warehouseId).select().single(),
+    delete: (warehouseId) => supabase.from('warehouses').delete().eq('warehouse_id', warehouseId),
   },
 
-  // Lots
+  // Lots (Header table for purchases)
   lots: {
-    getAll: () => supabase.from('lots').select('*').order('created_at', { ascending: false }),
+    getAll: () => supabase.from('lots').select(`
+      *,
+      farmers:farmer_id(farmer_id, auction_name, billing_name)
+    `).order('created_at', { ascending: false }),
     create: (lot) => supabase.from('lots').insert(lot).select().single(),
-    update: (id, updates) => supabase.from('lots').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('lots').delete().eq('id', id),
+    update: (lotId, updates) => supabase.from('lots').update(updates).eq('lot_id', lotId).select().single(),
+    delete: (lotId) => supabase.from('lots').delete().eq('lot_id', lotId),
     getByNumber: (lotNumber) => supabase.from('lots').select('*').ilike('lot_number', lotNumber),
   },
 
-  // Lot Products
-  lotProducts: {
-    getAll: () => supabase.from('lot_products').select('*'),
-    getByLotId: (lotId) => supabase.from('lot_products').select('*').eq('lot_id', lotId),
-    create: (lotProduct) => supabase.from('lot_products').insert(lotProduct).select().single(),
-    update: (id, updates) => supabase.from('lot_products').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('lot_products').delete().eq('id', id),
-    bulkCreate: (lotProducts) => supabase.from('lot_products').insert(lotProducts).select(),
+  // Lot Items (Individual products within lots)
+  lotItems: {
+    getAll: () => supabase.from('lot_items').select(`
+      *,
+      lots:lot_id(lot_id, lot_number, purchase_date),
+      products:product_id(product_id, product_name),
+      warehouses:warehouse_id(warehouse_id, warehouse_name)
+    `).order('created_at', { ascending: false }),
+    getByLotId: (lotId) => supabase.from('lot_items').select(`
+      *,
+      products:product_id(product_id, product_name),
+      warehouses:warehouse_id(warehouse_id, warehouse_name)
+    `).eq('lot_id', lotId),
+    create: (lotItem) => supabase.from('lot_items').insert(lotItem).select().single(),
+    update: (lotItemId, updates) => supabase.from('lot_items').update(updates).eq('lot_item_id', lotItemId).select().single(),
+    delete: (lotItemId) => supabase.from('lot_items').delete().eq('lot_item_id', lotItemId),
+    bulkCreate: (lotItems) => supabase.from('lot_items').insert(lotItems).select(),
+    getAvailableInventory: () => supabase.from('lot_items').select(`
+      *,
+      lots:lot_id(lot_id, lot_number, purchase_date),
+      products:product_id(product_id, product_name),
+      warehouses:warehouse_id(warehouse_id, warehouse_name)
+    `).gt('current_total_kg', 0).order('created_at'),
   },
 
-  // Purchase Payments
+  // Purchase Payments (Links to lot header)
   purchasePayments: {
-    getAll: () => supabase.from('purchase_payments').select('*').order('created_at', { ascending: false }),
+    getAll: () => supabase.from('purchase_payments').select(`
+      *,
+      lots:lot_id(lot_id, lot_number, purchase_date)
+    `).order('created_at', { ascending: false }),
     getByLotId: (lotId) => supabase.from('purchase_payments').select('*').eq('lot_id', lotId).order('created_at', { ascending: false }),
     create: (payment) => supabase.from('purchase_payments').insert(payment).select().single(),
-    update: (id, updates) => supabase.from('purchase_payments').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('purchase_payments').delete().eq('id', id),
+    update: (paymentId, updates) => supabase.from('purchase_payments').update(updates).eq('payment_id', paymentId).select().single(),
+    delete: (paymentId) => supabase.from('purchase_payments').delete().eq('payment_id', paymentId),
   },
 
   // Sales Orders
   salesOrders: {
-    getAll: () => supabase.from('sales_orders').select('*').order('created_at', { ascending: false }),
+    getAll: () => supabase.from('sales_orders').select(`
+      *,
+      customers:customer_id(customer_id, company_name, contact_person_name, bag_marking)
+    `).order('created_at', { ascending: false }),
     create: (order) => supabase.from('sales_orders').insert(order).select().single(),
-    update: (id, updates) => supabase.from('sales_orders').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('sales_orders').delete().eq('id', id),
+    update: (orderId, updates) => supabase.from('sales_orders').update(updates).eq('order_id', orderId).select().single(),
+    delete: (orderId) => supabase.from('sales_orders').delete().eq('order_id', orderId),
   },
 
-  // Pick List Items
-  pickListItems: {
-    getAll: () => supabase.from('pick_list_items').select('*').order('created_at', { ascending: false }),
-    getBySalesOrderId: (salesOrderId) => supabase.from('pick_list_items').select('*').eq('sales_order_id', salesOrderId),
-    create: (item) => supabase.from('pick_list_items').insert(item).select().single(),
-    update: (id, updates) => supabase.from('pick_list_items').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('pick_list_items').delete().eq('id', id),
+  // Pick List Items (Now links to specific LotItems)
+  picklistItems: {
+    getAll: () => supabase.from('picklist_items').select(`
+      *,
+      sales_orders:order_id(order_id, order_date, status),
+      lot_items:lot_item_id(
+        lot_item_id, 
+        current_total_kg,
+        lots:lot_id(lot_id, lot_number),
+        products:product_id(product_id, product_name),
+        warehouses:warehouse_id(warehouse_id, warehouse_name)
+      )
+    `).order('created_at', { ascending: false }),
+    getBySalesOrderId: (orderId) => supabase.from('picklist_items').select(`
+      *,
+      lot_items:lot_item_id(
+        lot_item_id,
+        current_total_kg,
+        lots:lot_id(lot_id, lot_number),
+        products:product_id(product_id, product_name),
+        warehouses:warehouse_id(warehouse_id, warehouse_name)
+      )
+    `).eq('order_id', orderId),
+    create: (item) => supabase.from('picklist_items').insert(item).select().single(),
+    update: (picklistItemId, updates) => supabase.from('picklist_items').update(updates).eq('picklist_item_id', picklistItemId).select().single(),
+    delete: (picklistItemId) => supabase.from('picklist_items').delete().eq('picklist_item_id', picklistItemId),
+    getPackingQueue: () => supabase.from('picklist_items').select(`
+      *,
+      sales_orders:order_id(
+        order_id, 
+        order_date,
+        customers:customer_id(customer_id, company_name, contact_person_name)
+      ),
+      lot_items:lot_item_id(
+        lot_item_id,
+        current_total_kg,
+        lots:lot_id(lot_id, lot_number, farmers:farmer_id(farmer_id, auction_name)),
+        products:product_id(product_id, product_name),
+        warehouses:warehouse_id(warehouse_id, warehouse_name)
+      )
+    `).eq('status', 'To Be Packed').order('created_at'),
   },
 
   // Dispatch Confirmations
   dispatchConfirmations: {
-    getAll: () => supabase.from('dispatch_confirmations').select('*').order('created_at', { ascending: false }),
+    getAll: () => supabase.from('dispatch_confirmations').select(`
+      *,
+      picklist_items:picklist_item_id(*)
+    `).order('created_at', { ascending: false }),
     create: (confirmation) => supabase.from('dispatch_confirmations').insert(confirmation).select().single(),
-    update: (id, updates) => supabase.from('dispatch_confirmations').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('dispatch_confirmations').delete().eq('id', id),
+    update: (dispatchId, updates) => supabase.from('dispatch_confirmations').update(updates).eq('dispatch_id', dispatchId).select().single(),
+    delete: (dispatchId) => supabase.from('dispatch_confirmations').delete().eq('dispatch_id', dispatchId),
   },
 
   // Sales Payments
   salesPayments: {
-    getAll: () => supabase.from('sales_payments').select('*').order('created_at', { ascending: false }),
-    getBySalesOrderId: (salesOrderId) => supabase.from('sales_payments').select('*').eq('sales_order_id', salesOrderId).order('created_at', { ascending: false }),
+    getAll: () => supabase.from('sales_payments').select(`
+      *,
+      sales_orders:order_id(order_id, order_date)
+    `).order('created_at', { ascending: false }),
+    getByOrderId: (orderId) => supabase.from('sales_payments').select('*').eq('order_id', orderId).order('created_at', { ascending: false }),
     create: (payment) => supabase.from('sales_payments').insert(payment).select().single(),
-    update: (id, updates) => supabase.from('sales_payments').update(updates).eq('id', id).select().single(),
-    delete: (id) => supabase.from('sales_payments').delete().eq('id', id),
+    update: (paymentId, updates) => supabase.from('sales_payments').update(updates).eq('payment_id', paymentId).select().single(),
+    delete: (paymentId) => supabase.from('sales_payments').delete().eq('payment_id', paymentId),
   },
 
   // Settings/Meta
   settings: {
     get: () => supabase.from('settings').select('*').limit(1).single(),
     upsert: (settings) => supabase.from('settings').upsert(settings).select().single(),
+    getByKey: (key) => supabase.from('settings').select('*').eq('setting_key', key).single(),
+  },
+
+  // Complex queries for business operations
+  queries: {
+    // Get complete lot information with all items
+    getLotWithItems: (lotId) => supabase.from('lots').select(`
+      *,
+      farmers:farmer_id(farmer_id, auction_name, billing_name),
+      lot_items:lot_id(
+        *,
+        products:product_id(product_id, product_name),
+        warehouses:warehouse_id(warehouse_id, warehouse_name)
+      ),
+      purchase_payments:lot_id(*)
+    `).eq('lot_id', lotId).single(),
+
+    // Get sales order with all items and inventory details
+    getSalesOrderWithItems: (orderId) => supabase.from('sales_orders').select(`
+      *,
+      customers:customer_id(customer_id, company_name, contact_person_name, bag_marking),
+      picklist_items:order_id(
+        *,
+        lot_items:lot_item_id(
+          *,
+          lots:lot_id(lot_id, lot_number),
+          products:product_id(product_id, product_name),
+          warehouses:warehouse_id(warehouse_id, warehouse_name)
+        )
+      ),
+      sales_payments:order_id(*)
+    `).eq('order_id', orderId).single(),
+
+    // Get inventory summary by product
+    getInventorySummary: () => supabase.from('lot_items').select(`
+      product_id,
+      products:product_id(product_id, product_name),
+      current_total_kg.sum(),
+      purchase_rate_per_kg.avg()
+    `).gt('current_total_kg', 0).group('product_id'),
+
+    // Get farmer purchase summary
+    getFarmerPurchaseSummary: () => supabase.rpc('get_farmer_purchase_summary'),
+
+    // Get customer sales summary
+    getCustomerSalesSummary: () => supabase.rpc('get_customer_sales_summary'),
   },
 }
 
-// Real-time subscriptions helper
+// Real-time subscriptions helper for enhanced schema
 export const subscribeToTable = (tableName, callback) => {
   return supabase
     .channel(`${tableName}_changes`)
@@ -134,6 +244,27 @@ export const subscribeToTable = (tableName, callback) => {
       }, 
       callback
     )
+    .subscribe()
+}
+
+// Subscribe to multiple related tables for complete lot tracking
+export const subscribeToLotChanges = (callback) => {
+  return supabase
+    .channel('lot_tracking')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'lots' }, callback)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'lot_items' }, callback)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_payments' }, callback)
+    .subscribe()
+}
+
+// Subscribe to sales order changes
+export const subscribeToSalesChanges = (callback) => {
+  return supabase
+    .channel('sales_tracking')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, callback)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'picklist_items' }, callback)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dispatch_confirmations' }, callback)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_payments' }, callback)
     .subscribe()
 }
 

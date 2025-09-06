@@ -16,11 +16,11 @@ export default function Lots(){
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [isMultiProduct, setIsMultiProduct] = useState(false)
   const [form, setForm] = useState({
-    purchaseDate: new Date().toISOString().slice(0,10),
-    farmerId: '',
-    lotNumber: '',
-    warehouseId: '',
-    bayNumber: '',
+    purchase_date: new Date().toISOString().slice(0,10),
+    farmer_id: '',
+    lot_number: '',
+    warehouse_id: '',
+    bay_number: '',
     initialAmountPaid: 0,
     initialPaymentMethod: 'Cash',
     initialPaymentRef: ''
@@ -28,11 +28,12 @@ export default function Lots(){
   const [products, setProducts] = useState([
     {
       id: Date.now(),
-      productId: '',
-      numBags: 0,
-      looseKg: 0,
-      purchaseRate: 0,
-      sippamKg: s.meta.sippamKgDefault
+      product_id: '',
+      initial_bags: 0,
+      initial_loose_kg: 0,
+      purchase_rate_per_kg: 0,
+      warehouse_id: '',
+      bay_number: ''
     }
   ])
 
@@ -52,11 +53,12 @@ export default function Lots(){
   const addProduct = () => {
     setProducts([...products, {
       id: Date.now(),
-      productId: '',
-      numBags: 0,
-      looseKg: 0,
-      purchaseRate: 0,
-      sippamKg: s.meta.sippamKgDefault
+      product_id: '',
+      initial_bags: 0,
+      initial_loose_kg: 0,
+      purchase_rate_per_kg: 0,
+      warehouse_id: form.warehouse_id || '',
+      bay_number: form.bay_number || ''
     }])
   }
   
@@ -72,9 +74,9 @@ export default function Lots(){
     let totalValue = 0
     
     products.forEach(product => {
-      const sippam = Number(product.sippamKg || s.meta.sippamKgDefault || 30)
-      const productKg = Number(product.numBags || 0) * sippam + Number(product.looseKg || 0)
-      const productValue = productKg * Number(product.purchaseRate || 0)
+      const sippam = 30 // Default sippam weight
+      const productKg = Number(product.initial_bags || 0) * sippam + Number(product.initial_loose_kg || 0)
+      const productValue = productKg * Number(product.purchase_rate_per_kg || 0)
       totalKg += productKg
       totalValue += productValue
     })
@@ -84,68 +86,75 @@ export default function Lots(){
   
   const { totalKg, totalValue } = calculateTotals()
 
-  const handleSubmit = () => {
-    if(!form.farmerId || !form.warehouseId || !form.lotNumber){
-      alert('Farmer, Warehouse, Lot Number are required')
+  const handleSubmit = async () => {
+    if(!form.farmer_id || !form.lot_number){
+      alert('Farmer and Lot Number are required')
       return
     }
     
     // Validate products
-    const validProducts = products.filter(p => p.productId && (p.numBags > 0 || p.looseKg > 0))
+    const validProducts = products.filter(p => p.product_id && (p.initial_bags > 0 || p.initial_loose_kg > 0))
     if(validProducts.length === 0) {
       alert('Please add at least one product with quantity')
       return
     }
     
-    // Check for duplicate lot number
-    const existingLot = lots.find(lot => lot.lotNumber.toLowerCase() === form.lotNumber.toLowerCase())
-    if(existingLot){
-      alert(`Lot number '${form.lotNumber}' already exists. Please use a unique lot number.`)
-      return
-    }
-    
-    // Prepare lot data
-    const lotData = {
-      ...form,
-      products: validProducts
-    }
-    
-    addLot(lotData)
-    const state = useStore.getState()
-    const newLot = state.lots[state.lots.length-1]
-    
-    if(Number(form.initialAmountPaid) > 0){
-      addPurchasePayment({ 
-        lotId: newLot.id, 
-        amount: Number(form.initialAmountPaid), 
-        paymentDate: form.purchaseDate,
-        method: form.initialPaymentMethod, 
-        reference: form.initialPaymentRef 
+    try {
+      // Prepare lot data for enhanced schema
+      const lotData = {
+        lot_number: form.lot_number,
+        farmer_id: form.farmer_id,
+        purchase_date: form.purchase_date,
+        lotItems: validProducts.map(product => ({
+          product_id: product.product_id,
+          warehouse_id: product.warehouse_id || form.warehouse_id,
+          bay_number: product.bay_number || form.bay_number,
+          initial_bags: Number(product.initial_bags || 0),
+          initial_loose_kg: Number(product.initial_loose_kg || 0),
+          purchase_rate_per_kg: Number(product.purchase_rate_per_kg || 0)
+        }))
+      }
+      
+      const newLot = await addLot(lotData)
+      
+      if(Number(form.initialAmountPaid) > 0){
+        await addPurchasePayment({ 
+          lot_id: newLot.lot_id, 
+          amount_paid: Number(form.initialAmountPaid), 
+          payment_date: form.purchase_date,
+          payment_method: form.initialPaymentMethod, 
+          reference_details: form.initialPaymentRef 
+        })
+      }
+      
+      // Reset form
+      setForm({
+        purchase_date: new Date().toISOString().slice(0,10),
+        farmer_id: '',
+        lot_number: '',
+        warehouse_id: '',
+        bay_number: '',
+        initialAmountPaid: 0,
+        initialPaymentMethod: 'Cash',
+        initialPaymentRef: ''
       })
+      setProducts([{
+        id: Date.now(),
+        product_id: '',
+        initial_bags: 0,
+        initial_loose_kg: 0,
+        purchase_rate_per_kg: 0,
+        warehouse_id: '',
+        bay_number: ''
+      }])
+      setIsMultiProduct(false)
+      
+      alert('Lot added successfully')
+      
+    } catch (error) {
+      console.error('Error adding lot:', error)
+      alert('Error adding lot: ' + (error.message || 'Unknown error'))
     }
-    
-    // Reset form
-    setForm({
-      purchaseDate: new Date().toISOString().slice(0,10),
-      farmerId: '',
-      lotNumber: '',
-      warehouseId: '',
-      bayNumber: '',
-      initialAmountPaid: 0,
-      initialPaymentMethod: 'Cash',
-      initialPaymentRef: ''
-    })
-    setProducts([{
-      id: Date.now(),
-      productId: '',
-      numBags: 0,
-      looseKg: 0,
-      purchaseRate: 0,
-      sippamKg: s.meta.sippamKgDefault
-    }])
-    setIsMultiProduct(false)
-    
-    alert('Lot added successfully')
   }
 
   return (
@@ -156,28 +165,28 @@ export default function Lots(){
         {/* Basic Lot Information */}
         <div className="grid grid-4">
           <Field label="Purchase Date">
-            <input type="date" value={form.purchaseDate} onChange={e=>handleChange('purchaseDate', e.target.value)} />
+            <input type="date" value={form.purchase_date} onChange={e=>handleChange('purchase_date', e.target.value)} />
           </Field>
           <Field label="Farmer">
-            <select value={form.farmerId} onChange={e=>handleChange('farmerId', e.target.value)}>
+            <select value={form.farmer_id} onChange={e=>handleChange('farmer_id', e.target.value)}>
               <option value="">Select Farmer</option>
-              {farmers.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              {farmers.map(f => <option key={f.farmer_id} value={f.farmer_id}>{f.auction_name}</option>)}
             </select>
           </Field>
           <Field label="Lot Number">
-            <input value={form.lotNumber} onChange={e=>handleChange('lotNumber', e.target.value)} placeholder="Unique lot number" />
+            <input value={form.lot_number} onChange={e=>handleChange('lot_number', e.target.value)} placeholder="Unique lot number" />
           </Field>
           <Field label="Warehouse">
-            <select value={form.warehouseId} onChange={e=>handleChange('warehouseId', e.target.value)}>
+            <select value={form.warehouse_id} onChange={e=>handleChange('warehouse_id', e.target.value)}>
               <option value="">Select Warehouse</option>
-              {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {warehouses.map(w => <option key={w.warehouse_id} value={w.warehouse_id}>{w.warehouse_name}</option>)}
             </select>
           </Field>
         </div>
         
         <div className="grid grid-2" style={{marginTop: 12}}>
           <Field label="Bay Number">
-            <input value={form.bayNumber} onChange={e=>handleChange('bayNumber', e.target.value)} placeholder="Bay/Location" />
+            <input value={form.bay_number} onChange={e=>handleChange('bay_number', e.target.value)} placeholder="Bay/Location" />
           </Field>
           <Field label="Lot Type">
             <select value={isMultiProduct ? 'multi' : 'single'} onChange={e => {
@@ -214,52 +223,53 @@ export default function Lots(){
               <div className="grid grid-5">
                 <Field label="Product Type">
                   <select 
-                    value={product.productId} 
-                    onChange={e=>handleProductChange(index, 'productId', e.target.value)}
+                    value={product.product_id} 
+                    onChange={e=>handleProductChange(index, 'product_id', e.target.value)}
                   >
                     <option value="">Select Product</option>
-                    {productList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {productList.map(p => <option key={p.product_id} value={p.product_id}>{p.product_name}</option>)}
                   </select>
                 </Field>
                 <Field label="Bags (Sippam)">
                   <input 
                     type="number" 
-                    value={product.numBags} 
-                    onChange={e=>handleProductChange(index, 'numBags', e.target.value)} 
+                    value={product.initial_bags} 
+                    onChange={e=>handleProductChange(index, 'initial_bags', e.target.value)} 
                   />
                 </Field>
                 <Field label="Loose Kg">
                   <input 
                     type="number" 
-                    step="0.01"
-                    value={product.looseKg} 
-                    onChange={e=>handleProductChange(index, 'looseKg', e.target.value)} 
+                    step="0.001"
+                    value={product.initial_loose_kg} 
+                    onChange={e=>handleProductChange(index, 'initial_loose_kg', e.target.value)} 
                   />
                 </Field>
                 <Field label="Rate per Kg (₹)">
                   <input 
                     type="number" 
                     step="0.01"
-                    value={product.purchaseRate} 
-                    onChange={e=>handleProductChange(index, 'purchaseRate', e.target.value)} 
+                    value={product.purchase_rate_per_kg} 
+                    onChange={e=>handleProductChange(index, 'purchase_rate_per_kg', e.target.value)} 
                   />
                 </Field>
-                <Field label="Sippam Kg">
-                  <input 
-                    type="number" 
-                    value={product.sippamKg} 
-                    onChange={e=>handleProductChange(index, 'sippamKg', e.target.value)} 
-                    placeholder={s.meta.sippamKgDefault}
-                  />
+                <Field label="Warehouse">
+                  <select 
+                    value={product.warehouse_id} 
+                    onChange={e=>handleProductChange(index, 'warehouse_id', e.target.value)}
+                  >
+                    <option value="">Use Default</option>
+                    {warehouses.map(w => <option key={w.warehouse_id} value={w.warehouse_id}>{w.warehouse_name}</option>)}
+                  </select>
                 </Field>
               </div>
               
               {/* Product Calculation */}
-              {product.productId && (
+              {product.product_id && (
                 <div className="product-calculation" style={{marginTop: 8, padding: 8, backgroundColor: '#f8f9fa', borderRadius: 4}}>
                   <div className="row">
-                    <span>Total Kg: {((Number(product.numBags||0) * Number(product.sippamKg||s.meta.sippamKgDefault||30)) + Number(product.looseKg||0)).toFixed(2)}</span>
-                    <span>Value: ₹{(((Number(product.numBags||0) * Number(product.sippamKg||s.meta.sippamKgDefault||30)) + Number(product.looseKg||0)) * Number(product.purchaseRate||0)).toFixed(2)}</span>
+                    <span>Total Kg: {((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)).toFixed(3)}</span>
+                    <span>Value: ₹{(((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)) * Number(product.purchase_rate_per_kg||0)).toFixed(2)}</span>
                   </div>
                 </div>
               )}
@@ -273,7 +283,7 @@ export default function Lots(){
           <div className="row">
             <div className="badge good">Total Kg: {totalKg.toFixed(2)}</div>
             <div className="badge good">Total Value: ₹{totalValue.toFixed(2)}</div>
-            <div className="badge">Products: {products.filter(p => p.productId).length}</div>
+            <div className="badge good">Products: {products.filter(p => p.product_id).length}</div>
           </div>
         </div>
 
@@ -314,28 +324,32 @@ export default function Lots(){
           <h2>Inventory</h2>
           <Table
             columns={[
-              {header:'Lot #', key:'lotNumber'},
+              {header:'Lot #', key:'lot_number'},
               {header:'Products', render:r=> {
-                const lotProducts = s.lotProducts.filter(lp => lp.lotId === r.id)
-                return lotProducts.map(lp => {
-                  const product = s.products.find(p => p.id === lp.productId)
-                  return product?.name
+                const lotItems = s.lotItems.filter(li => li.lot_id === r.lot_id)
+                return lotItems.map(li => {
+                  const product = s.products.find(p => p.product_id === li.product_id)
+                  return product?.product_name
                 }).filter(Boolean).join(', ') || 'No products'
               }},
               {header:'Farmer', render:r=> {
-                const farmer = s.farmers.find(f=>f.id===r.farmerId)
-                return farmer?.name || '-'
+                const farmer = s.farmers.find(f=>f.farmer_id===r.farmer_id)
+                return farmer?.auction_name || '-'
               }},
-              {header:'Purchase Date', key:'purchaseDate'},
+              {header:'Purchase Date', key:'purchase_date'},
               {header:'Total Kg', render:r=> {
-                const lotProducts = s.lotProducts.filter(lp => lp.lotId === r.id)
-                const totalKg = lotProducts.reduce((sum, lp) => sum + lp.currentTotalKg, 0)
+                const lotItems = s.lotItems.filter(li => li.lot_id === r.lot_id)
+                const totalKg = lotItems.reduce((sum, li) => sum + li.current_total_kg, 0)
                 return totalKg.toFixed(2)
               }},
-              {header:'Total Purchase', render: r => `₹${Number(r.totalPurchaseValue || 0).toFixed(2)}`},
+              {header:'Total Purchase', render: r => {
+                const lotItems = s.lotItems.filter(li => li.lot_id === r.lot_id)
+                const totalValue = lotItems.reduce((sum, li) => sum + li.total_purchase_value, 0)
+                return `₹${Number(totalValue || 0).toFixed(2)}`
+              }},
               {header:'Product Count', render:r=> {
-                const lotProducts = s.lotProducts.filter(lp => lp.lotId === r.id)
-                return lotProducts.length
+                const lotItems = s.lotItems.filter(li => li.lot_id === r.lot_id)
+                return lotItems.length
               }},
               {header:'Actions', render: r => (
                 <Button variant="secondary" onClick={() => setSelectedLot(r)}>View Details</Button>
@@ -363,22 +377,25 @@ function LotDetailsView({ lot, onBack, showPaymentForm, setShowPaymentForm }) {
   const productList = s.products
   const warehouses = s.warehouses
   
-  // Get lot products and payments
-  const lotProducts = s.lotProducts.filter(lp => lp.lotId === lot.id)
-  const lotPayments = s.purchasePayments.filter(p => p.lotId === lot.id)
-  const totalPaid = lotPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-  const balance = (lot.totalPurchaseValue || 0) - totalPaid
+  // Get lot items and payments
+  const lotItems = s.lotItems.filter(li => li.lot_id === lot.lot_id)
+  const lotPayments = s.purchasePayments.filter(p => p.lot_id === lot.lot_id)
+  const totalPaid = lotPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0)
   
-  const farmer = farmers.find(f => f.id === lot.farmerId)
-  const warehouse = warehouses.find(w => w.id === lot.warehouseId)
+  // Calculate total value from lot items
+  const totalPurchaseValue = lotItems.reduce((sum, li) => sum + li.total_purchase_value, 0)
+  const balance = totalPurchaseValue - totalPaid
+  
+  const farmer = farmers.find(f => f.farmer_id === lot.farmer_id)
+  const warehouse = warehouses.find(w => w.warehouse_id === lot.warehouse_id)
   
   const handleAddPayment = (paymentData) => {
     addPurchasePayment({
-      lotId: lot.id,
-      amount: paymentData.amount,
-      paymentDate: paymentData.paymentDate,
-      method: paymentData.method,
-      reference: paymentData.reference
+      lot_id: lot.lot_id,
+      amount_paid: paymentData.amount,
+      payment_date: paymentData.paymentDate,
+      payment_method: paymentData.method,
+      reference_details: paymentData.reference
     })
     setShowPaymentForm(false)
     alert('Payment added successfully')
@@ -388,7 +405,7 @@ function LotDetailsView({ lot, onBack, showPaymentForm, setShowPaymentForm }) {
     <div>
       <div className="row" style={{ marginBottom: 16, alignItems: 'center' }}>
         <Button variant="secondary" onClick={onBack}>← Back to Lots</Button>
-        <h2 style={{ margin: 0 }}>Lot Details: {lot.lotNumber}</h2>
+        <h2 style={{ margin: 0 }}>Lot Details: {lot.lot_number}</h2>
       </div>
       
       <div className="grid grid-2">
@@ -396,18 +413,18 @@ function LotDetailsView({ lot, onBack, showPaymentForm, setShowPaymentForm }) {
         <div className="panel">
           <h3>Lot Information</h3>
           <div className="details-grid">
-            <div><strong>Purchase Date:</strong> {lot.purchaseDate}</div>
-            <div><strong>Farmer:</strong> {farmer?.name || '-'}</div>
-            <div><strong>Warehouse:</strong> {warehouse?.name || '-'}</div>
-            <div><strong>Bay Number:</strong> {lot.bayNumber || '-'}</div>
-            <div><strong>Product Count:</strong> {lotProducts.length}</div>
-            <div><strong>Total Current Kg:</strong> {lotProducts.reduce((sum, lp) => sum + lp.currentTotalKg, 0).toFixed(2)}</div>
+            <div><strong>Purchase Date:</strong> {lot.purchase_date}</div>
+            <div><strong>Farmer:</strong> {farmer?.auction_name || '-'}</div>
+            <div><strong>Warehouse:</strong> {warehouse?.warehouse_name || '-'}</div>
+            <div><strong>Bay Number:</strong> {lot.bay_number || '-'}</div>
+            <div><strong>Product Count:</strong> {lotItems.length}</div>
+            <div><strong>Total Current Kg:</strong> {lotItems.reduce((sum, li) => sum + li.current_total_kg, 0).toFixed(2)}</div>
           </div>
         </div>
         
         {/* Financial Summary */}
         <PaymentSummary 
-          totalValue={lot.totalPurchaseValue || 0}
+          totalValue={totalPurchaseValue || 0}
           totalPaid={totalPaid}
           payments={lotPayments}
           title="Purchase Financial Summary"
@@ -422,24 +439,28 @@ function LotDetailsView({ lot, onBack, showPaymentForm, setShowPaymentForm }) {
         <h3>Products in this Lot</h3>
         <Table
           columns={[
-            {header:'Product', render: lp => {
-              const product = productList.find(p => p.id === lp.productId)
-              return product?.name || 'Unknown Product'
+            {header:'Product', render: li => {
+              const product = productList.find(p => p.product_id === li.product_id)
+              return product?.product_name || 'Unknown Product'
             }},
-            {header:'Bags', key:'numBags'},
-            {header:'Loose Kg', render: lp => Number(lp.looseKg).toFixed(2)},
-            {header:'Sippam Kg', key:'sippamKg'},
-            {header:'Initial Total Kg', render: lp => Number(lp.initialTotalKg).toFixed(2)},
-            {header:'Current Kg', render: lp => Number(lp.currentTotalKg).toFixed(2)},
-            {header:'Rate/Kg', render: lp => `₹${Number(lp.purchaseRate).toFixed(2)}`},
-            {header:'Product Value', render: lp => `₹${Number(lp.productValue).toFixed(2)}`},
-            {header:'Status', render: lp => (
-              <span className={`status-badge ${lp.currentTotalKg > 0 ? 'status-available' : 'status-sold'}`}>
-                {lp.currentTotalKg > 0 ? 'Available' : 'Sold Out'}
+            {header:'Warehouse', render: li => {
+              const warehouse = warehouses.find(w => w.warehouse_id === li.warehouse_id)
+              return warehouse?.warehouse_name || '-'
+            }},
+            {header:'Bay Number', key:'bay_number'},
+            {header:'Bags', key:'initial_bags'},
+            {header:'Loose Kg', render: li => Number(li.initial_loose_kg).toFixed(2)},
+            {header:'Initial Total Kg', render: li => Number(li.initial_total_kg).toFixed(2)},
+            {header:'Current Kg', render: li => Number(li.current_total_kg).toFixed(2)},
+            {header:'Rate/Kg', render: li => `₹${Number(li.purchase_rate_per_kg).toFixed(2)}`},
+            {header:'Product Value', render: li => `₹${Number(li.total_purchase_value).toFixed(2)}`},
+            {header:'Status', render: li => (
+              <span className={`status-badge ${li.current_total_kg > 0 ? 'status-available' : 'status-sold'}`}>
+                {li.current_total_kg > 0 ? 'Available' : 'Sold Out'}
               </span>
             )}
           ]}
-          rows={lotProducts}
+          rows={lotItems}
         />
       </div>
       
