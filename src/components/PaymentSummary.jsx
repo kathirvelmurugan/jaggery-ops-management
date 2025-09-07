@@ -11,11 +11,11 @@ export function PaymentSummary({
   const isOverpaid = balance < 0
   const isPaid = Math.abs(balance) < 0.01
   
-  // Calculate payment method breakdown
-  const cashPayments = payments.filter(p => p.method === 'Cash')
-  const rtgsPayments = payments.filter(p => p.method === 'RTGS')
-  const totalCash = cashPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-  const totalRTGS = rtgsPayments.reduce((sum, p) => sum + Number(p.amount), 0)
+  // Calculate payment method breakdown - handle both 'method' and 'payment_method' fields
+  const cashPayments = payments.filter(p => (p.method || p.payment_method) === 'Cash')
+  const rtgsPayments = payments.filter(p => (p.method || p.payment_method) === 'RTGS')
+  const totalCash = cashPayments.reduce((sum, p) => sum + Number(p.amount || p.amount_paid || 0), 0)
+  const totalRTGS = rtgsPayments.reduce((sum, p) => sum + Number(p.amount || p.amount_paid || 0), 0)
 
   return (
     <div className="panel">

@@ -180,19 +180,19 @@ function PickListCreator(){
       
       {/* Live Calculation Display */}
       {selectedLot && selectedLotItem && (
-        <div className="calculation-summary" style={{marginTop: 12, padding: 12, backgroundColor: '#f8f9fa', borderRadius: 4}}>
-          <h4 style={{margin: '0 0 8px 0', fontSize: 14}}>Calculation Summary</h4>
+        <div className="calculation-summary">
+          <h4>Calculation Summary</h4>
           <div className="grid grid-4">
             <div><strong>Lot:</strong> {selectedLot.lot_number}</div>
             <div><strong>Product:</strong> {s.products.find(p => p.product_id === selectedLotItem.product_id)?.product_name || 'Unknown'}</div>
             <div><strong>Available:</strong> {selectedLotItem.current_total_kg.toFixed(2)} kg</div>
             <div><strong>Planned Total:</strong> {plannedTotalKg.toFixed(2)} kg</div>
           </div>
-          <div className="grid grid-2" style={{marginTop: 8}}>
+          <div className="grid grid-2 calc-financials">
             <div><strong>Estimated Value:</strong> ₹{plannedValue.toFixed(2)}</div>
             <div><strong>Margin:</strong> ₹{(Number(form.sale_rate_per_kg) - Number(selectedLotItem.purchase_rate_per_kg)).toFixed(2)}/kg</div>
           </div>
-          <div style={{marginTop: 8, fontSize: 12, color: '#666'}}>
+          <div className="calc-rates">
             Purchase Rate: ₹{selectedLotItem.purchase_rate_per_kg}/kg | Sale Rate: ₹{form.sale_rate_per_kg}/kg
           </div>
         </div>
@@ -254,8 +254,16 @@ export default function SalesOrders(){
   const rows = orders.map(o => {
     const customer = s.customers.find(c=>c.customer_id===o.customer_id)?.company_name || '-'
     const items = s.picklistItems.filter(p=>p.order_id===o.order_id)
-    const saleValue = items.reduce((a,p)=> a + ((p.actual_total_kg||0) * (p.sale_rate_per_kg||0)), 0)
-    const paid = s.salesPayments.filter(sp=>sp.order_id===o.order_id).reduce((a,b)=>a+b.amount_paid,0)
+    
+    // Calculate sale value using actual quantities where available, planned as fallback
+    const saleValue = items.reduce((sum, item) => {
+      const actualKg = item.actual_total_kg
+      const plannedKg = (item.planned_bags || 0) * 30 + (item.planned_loose_kg || 0) // 30kg default sippam
+      const quantity = actualKg > 0 ? actualKg : plannedKg
+      return sum + (quantity * (item.sale_rate_per_kg || 0))
+    }, 0)
+    
+    const paid = s.salesPayments.filter(sp=>sp.order_id===o.order_id).reduce((a,b)=>a+Number(b.amount_paid),0)
     const balance = saleValue - paid
     return { ...o, customer, items:items.length, saleValue, paid, balance }
   })
@@ -310,10 +318,14 @@ function SalesOrderDetailsView({ order, onBack, showPaymentForm, setShowPaymentF
     pickItems.some(p => p.picklist_item_id === d.picklist_item_id)
   )
   
-  // Calculate financial data
-  const totalOrderValue = dispatches.reduce((sum, d) => {
-    const pickItem = pickItems.find(p => p.picklist_item_id === d.picklist_item_id)
-    return sum + (d.actual_total_kg * (pickItem?.sale_rate_per_kg || 0))
+  // Calculate financial data - Enhanced to show real values
+  // Use actual packed/dispatched quantities where available, planned quantities as fallback
+  const totalOrderValue = pickItems.reduce((sum, item) => {
+    // Check if item has been packed (has actual quantities)
+    const actualKg = item.actual_total_kg
+    const plannedKg = (item.planned_bags || 0) * 30 + (item.planned_loose_kg || 0) // 30kg default sippam
+    const quantity = actualKg > 0 ? actualKg : plannedKg
+    return sum + (quantity * (item.sale_rate_per_kg || 0))
   }, 0)
   
   const orderPayments = s.salesPayments.filter(p => p.order_id === order.order_id)

@@ -853,3 +853,79 @@ hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
     font-size: 48px;
   }
 }
+
+/* Calculation Summary - Enhanced Visibility */
+.calculation-summary {
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--nav-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.calculation-summary h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.calculation-summary .grid {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.calculation-summary .calc-financials {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.calculation-summary .calc-rates {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.calculation-summary strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Product Calculation */
+.product-calculation {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--nav-bg);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.product-calculation .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text);
+}
+
+/* Lot Totals */
+.lot-totals {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+}
+
+.lot-totals h4 {
+  margin: 0 0 8px 0;
+  color: var(--good);
+  font-size: 14px;
+  font-weight: 600;
+}

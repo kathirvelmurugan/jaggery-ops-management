@@ -266,7 +266,7 @@ export default function Lots(){
               
               {/* Product Calculation */}
               {product.product_id && (
-                <div className="product-calculation" style={{marginTop: 8, padding: 8, backgroundColor: '#f8f9fa', borderRadius: 4}}>
+                <div className="product-calculation">
                   <div className="row">
                     <span>Total Kg: {((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)).toFixed(3)}</span>
                     <span>Value: ₹{(((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)) * Number(product.purchase_rate_per_kg||0)).toFixed(2)}</span>
@@ -278,8 +278,8 @@ export default function Lots(){
         </div>
         
         {/* Lot Totals */}
-        <div className="lot-totals" style={{marginTop: 16, padding: 16, backgroundColor: '#e8f5e8', borderRadius: 8}}>
-          <h4 style={{margin: '0 0 8px 0'}}>Lot Summary</h4>
+        <div className="lot-totals">
+          <h4>Lot Summary</h4>
           <div className="row">
             <div className="badge good">Total Kg: {totalKg.toFixed(2)}</div>
             <div className="badge good">Total Value: ₹{totalValue.toFixed(2)}</div>
