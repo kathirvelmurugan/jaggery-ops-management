@@ -22,7 +22,7 @@ export default function PackingQueue(){
 
   const [form, setForm] = useState({})
 
-  const confirm = (picklistItemId) => {
+  const confirm = async (picklistItemId) => {
     const vals = form[picklistItemId] || { actualBags:0, actualLooseKg:0 }
     const actualBags = Number(vals.actualBags||0)
     const actualLooseKg = Number(vals.actualLooseKg||0)
@@ -32,25 +32,32 @@ export default function PackingQueue(){
       return
     }
     
-    // Use the store method to confirm packing
-    if (s.confirmPack) {
-      s.confirmPack({ pickItemId: picklistItemId, actualBags, actualLooseKg })
-    } else {
-      // Fallback update method
-      s.updateItem('picklistItems', 'picklist_item_id', picklistItemId, {
-        status: 'Packed',
-        actual_bags: actualBags,
-        actual_loose_kg: actualLooseKg,
-        actual_total_kg: actualBags * 30 + actualLooseKg // Default sippam
-      })
+    try {
+      // Use the store method to confirm packing
+      if (s.confirmPack) {
+        await s.confirmPack({ pickItemId: picklistItemId, actualBags, actualLooseKg })
+      } else {
+        // Fallback update method
+        const sippam = 30
+        const actualTotalKg = actualBags * sippam + actualLooseKg
+        await s.updateItem('picklistItems', 'picklist_item_id', picklistItemId, {
+          status: 'Packed',
+          actual_bags: actualBags,
+          actual_loose_kg: actualLooseKg,
+          actual_total_kg: actualTotalKg
+        })
+      }
+      
+      // Clear the form for this item
+      const newForm = {...form}
+      delete newForm[picklistItemId]
+      setForm(newForm)
+      
+      alert('Packing confirmed successfully')
+    } catch (error) {
+      console.error('Error confirming pack:', error)
+      alert('Error confirming pack: ' + (error.message || 'Unknown error'))
     }
-    
-    // Clear the form for this item
-    const newForm = {...form}
-    delete newForm[picklistItemId]
-    setForm(newForm)
-    
-    alert('Packing confirmed successfully')
   }
 
   const getItemDetails = (item) => {
@@ -419,107 +426,6 @@ export default function PackingQueue(){
             padding: 8px;
             font-size: 12px;
           }
-        }
-      `}</style>
-          margin-bottom: 12px;
-          padding-bottom: 12px;
-          border-bottom: 1px solid #e0e0e0;
-        }
-        
-        .customer-info h4 {
-          margin: 0 0 4px 0;
-          color: #333;
-        }
-        
-        .order-info {
-          font-size: 12px;
-          color: #666;
-        }
-        
-        .lot-details {
-          margin: 12px 0;
-          padding: 12px;
-          background: #f5f5f5;
-          border-radius: 4px;
-          font-size: 14px;
-        }
-        
-        .planned-actual {
-          margin: 16px 0;
-          gap: 16px;
-        }
-        
-        .planned-section, .actual-section {
-          padding: 12px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-        }
-        
-        .planned-section {
-          background: #e8f5e8;
-        }
-        
-        .actual-section {
-          background: #fff3e0;
-        }
-        
-        .planned-section h5, .actual-section h5 {
-          margin: 0 0 8px 0;
-          font-size: 14px;
-          color: #333;
-        }
-        
-        .details {
-          font-size: 13px;
-          line-height: 1.4;
-        }
-        
-        .packing-inputs {
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-        
-        .actual-calculation {
-          font-size: 13px;
-          padding: 8px;
-          background: #f0f0f0;
-          border-radius: 4px;
-        }
-        
-        .variance.positive {
-          color: #4CAF50;
-        }
-        
-        .variance.negative {
-          color: #FF9800;
-        }
-        
-        .packing-actions {
-          margin-top: 16px;
-          text-align: right;
-        }
-        
-        .packed-items {
-          max-height: 300px;
-          overflow-y: auto;
-        }
-        
-        .packed-item {
-          padding: 8px 12px;
-          margin: 8px 0;
-          background: #e8f5e8;
-          border-radius: 4px;
-          font-size: 13px;
-        }
-        
-        .status-badge.status-to-be-packed {
-          background: #fff3e0;
-          color: #FF9800;
-        }
-        
-        .status-badge.status-packed {
-          background: #e8f5e8;
-          color: #4CAF50;
         }
       `}</style>
     </div>

@@ -73,11 +73,22 @@ export default function Payments(){
           </Field>
           <Field label="Ref/Notes"><input value={pp.ref} onChange={e=>setPP({...pp, ref:e.target.value})} /></Field>
         </div>
-        <Button className="primary" onClick={()=>{
+        <Button className="primary" onClick={async ()=>{
           if(!pp.lot_id || !pp.amount) return alert('Select lot and amount')
-          s.addPurchasePayment({...pp, payment_date: new Date().toISOString().slice(0,10), reference_details: pp.ref})
-          setPP({ lot_id:'', amount:0, method:'Cash', ref:'' }) // Reset form
-          alert('Purchase payment recorded')
+          try {
+            await s.addPurchasePayment({
+              lot_id: pp.lot_id,
+              amount_paid: Number(pp.amount),
+              payment_date: new Date().toISOString().slice(0,10),
+              payment_method: pp.method,
+              reference_details: pp.ref
+            })
+            setPP({ lot_id:'', amount:0, method:'Cash', ref:'' }) // Reset form
+            alert('Purchase payment recorded successfully')
+          } catch (error) {
+            console.error('Error adding purchase payment:', error)
+            alert('Error recording payment: ' + (error.message || 'Unknown error'))
+          }
         }}>Save</Button>
 
         <hr />
@@ -126,11 +137,22 @@ export default function Payments(){
           </Field>
           <Field label="Ref/Notes"><input value={sp.ref} onChange={e=>setSP({...sp, ref:e.target.value})} /></Field>
         </div>
-        <Button className="primary" onClick={()=>{
+        <Button className="primary" onClick={async ()=>{
           if(!sp.order_id || !sp.amount) return alert('Select Sales Order and amount')
-          s.addSalesPayment({...sp, payment_date: new Date().toISOString().slice(0,10), reference_details: sp.ref})
-          setSP({ order_id:'', amount:0, method:'Cash', ref:'' }) // Reset form
-          alert('Sales payment recorded')
+          try {
+            await s.addSalesPayment({
+              order_id: sp.order_id,
+              amount_paid: Number(sp.amount),
+              payment_date: new Date().toISOString().slice(0,10),
+              payment_method: sp.method,
+              reference_details: sp.ref
+            })
+            setSP({ order_id:'', amount:0, method:'Cash', ref:'' }) // Reset form
+            alert('Sales payment recorded successfully')
+          } catch (error) {
+            console.error('Error adding sales payment:', error)
+            alert('Error recording payment: ' + (error.message || 'Unknown error'))
+          }
         }}>Save</Button>
 
         <hr />

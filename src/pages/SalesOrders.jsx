@@ -257,10 +257,12 @@ export default function SalesOrders(){
     
     // Calculate sale value using actual quantities where available, planned as fallback
     const saleValue = items.reduce((sum, item) => {
-      const actualKg = item.actual_total_kg
-      const plannedKg = (item.planned_bags || 0) * 30 + (item.planned_loose_kg || 0) // 30kg default sippam
+      // Check if item has been packed (has actual quantities)
+      const actualKg = item.actual_total_kg || 0
+      const plannedKg = (Number(item.planned_bags) || 0) * 30 + (Number(item.planned_loose_kg) || 0) // 30kg default sippam
       const quantity = actualKg > 0 ? actualKg : plannedKg
-      return sum + (quantity * (item.sale_rate_per_kg || 0))
+      const rate = Number(item.sale_rate_per_kg) || 0
+      return sum + (quantity * rate)
     }, 0)
     
     const paid = s.salesPayments.filter(sp=>sp.order_id===o.order_id).reduce((a,b)=>a+Number(b.amount_paid),0)
@@ -322,10 +324,11 @@ function SalesOrderDetailsView({ order, onBack, showPaymentForm, setShowPaymentF
   // Use actual packed/dispatched quantities where available, planned quantities as fallback
   const totalOrderValue = pickItems.reduce((sum, item) => {
     // Check if item has been packed (has actual quantities)
-    const actualKg = item.actual_total_kg
-    const plannedKg = (item.planned_bags || 0) * 30 + (item.planned_loose_kg || 0) // 30kg default sippam
+    const actualKg = Number(item.actual_total_kg) || 0
+    const plannedKg = (Number(item.planned_bags) || 0) * 30 + (Number(item.planned_loose_kg) || 0) // 30kg default sippam
     const quantity = actualKg > 0 ? actualKg : plannedKg
-    return sum + (quantity * (item.sale_rate_per_kg || 0))
+    const rate = Number(item.sale_rate_per_kg) || 0
+    return sum + (quantity * rate)
   }, 0)
   
   const orderPayments = s.salesPayments.filter(p => p.order_id === order.order_id)

@@ -917,6 +917,44 @@ export default function MasterData(){
           padding: 6px 10px;
         }
         
+        /* Ensure grid layouts work properly */
+        .grid {
+          display: grid;
+          gap: 16px;
+        }
+        
+        .grid-2 {
+          grid-template-columns: 1fr 1fr;
+        }
+        
+        .grid-3 {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        
+        /* Field styling */
+        .field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        
+        .field label {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text);
+        }
+        
+        .field input,
+        .field textarea,
+        .field select {
+          padding: 8px 12px;
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          background: var(--panel);
+          color: var(--text);
+          font-size: 14px;
+        }
+        
         @media (max-width: 768px) {
           .tab-navigation {
             flex-direction: column;

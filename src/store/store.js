@@ -157,12 +157,13 @@ export const useStore = create((set, get) => ({
       ])
       
       // Load operational data
-      const [lotsRes, lotItemsRes, purchasePaymentsRes, salesOrdersRes, picklistItemsRes] = await Promise.all([
+      const [lotsRes, lotItemsRes, purchasePaymentsRes, salesOrdersRes, picklistItemsRes, salesPaymentsRes] = await Promise.all([
         db.lots.getAll(),
         db.lotItems.getAll(),
         db.purchasePayments.getAll(),
         db.salesOrders.getAll(),
         db.picklistItems.getAll(),
+        db.salesPayments.getAll(),
       ])
       
       // Update store with enhanced schema data
@@ -179,6 +180,7 @@ export const useStore = create((set, get) => ({
         purchasePayments: purchasePaymentsRes.data || [],
         salesOrders: salesOrdersRes.data || [],
         picklistItems: picklistItemsRes.data || [],
+        salesPayments: salesPaymentsRes.data || [],
         
         initialized: true,
         loading: false,
@@ -444,9 +446,12 @@ export const useStore = create((set, get) => ({
       const newCurrentKg = Math.max(0, lotItem.current_total_kg - actualTotalKg)
       await db.lotItems.update(lotItem.lot_item_id, { current_total_kg: newCurrentKg })
       
-      // Update pick item status
+      // Update pick item status with actual quantities
       await db.picklistItems.update(pickItemId, {
-        status: 'Packed'
+        status: 'Packed',
+        actual_bags: Number(actualBags || 0),
+        actual_loose_kg: Number(actualLooseKg || 0),
+        actual_total_kg: actualTotalKg
       })
       
       // Create dispatch confirmation
@@ -468,7 +473,13 @@ export const useStore = create((set, get) => ({
       const currentPickItems = get().picklistItems
       set({
         picklistItems: currentPickItems.map(p => 
-          p.picklist_item_id === pickItemId ? { ...p, status: 'Packed' } : p
+          p.picklist_item_id === pickItemId ? { 
+            ...p, 
+            status: 'Packed',
+            actual_bags: Number(actualBags || 0),
+            actual_loose_kg: Number(actualLooseKg || 0),
+            actual_total_kg: actualTotalKg
+          } : p
         )
       })
       
@@ -508,7 +519,7 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // Helper methods for enhanced schema
+
   updateSalesOrderStatus: async (orderId, status) => {
     try {
       await db.salesOrders.update(orderId, { status })

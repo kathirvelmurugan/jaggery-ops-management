@@ -174,7 +174,7 @@ export default function App(){
       {/* Minimal Footer */}
       <footer className="app-footer">
         <div className="footer-content">
-          <span>Jaggery OMS • React + Supabase</span>
+          <span>Powered by kathir.ai | 9159007007</span>
           {currentUser && (
             <span className="footer-user">Logged in as {currentUser.full_name} ({currentUser.role})</span>
           )}
