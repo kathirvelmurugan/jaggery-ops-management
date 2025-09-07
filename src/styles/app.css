@@ -175,6 +175,27 @@ a:hover { opacity: 0.8; }
   box-shadow: var(--shadow);
 }
 
+.nav-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  position: relative;
+}
+
+.nav-item.disabled:hover {
+  transform: none;
+  background: transparent;
+  color: var(--muted);
+}
+
+.nav-lock {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 8px;
+  opacity: 0.7;
+}
+
 .nav-icon {
   font-size: 14px;
 }
@@ -304,9 +325,15 @@ a:hover { opacity: 0.8; }
 .footer-content {
   max-width: 1400px;
   margin: 0 auto;
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 11px;
   color: var(--muted);
+}
+
+.footer-user {
+  font-style: italic;
 }
 
 /* Buttons - Super Simple */
@@ -401,6 +428,33 @@ label {
   color:#94a3b8; 
   margin-bottom: 6px; 
   font-weight: 500;
+}
+
+/* Enhanced Field Styles */
+.field-container {
+  position: relative;
+}
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.field-label-error {
+  display: block;
+  font-size: 13px;
+  color: var(--bad);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.required-indicator {
+  color: var(--bad);
+  margin-left: 2px;
+  font-weight: 700;
 }
 
 input, select, textarea { 
@@ -706,6 +760,137 @@ hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
 
 .product-info {
   flex: 1;
+}
+
+/* Enhanced Lot Entry Styles */
+.product-entry.has-errors {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.product-calculation {
+  transition: all 0.2s ease;
+}
+
+.calc-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.calc-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.calc-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.calc-value.good {
+  color: var(--good);
+}
+
+.calc-value.accent {
+  color: var(--accent);
+}
+
+.lot-summary-item {
+  text-align: center;
+  padding: 12px;
+  background: rgba(34, 211, 238, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+}
+
+.summary-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-value {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.summary-value.good {
+  color: var(--good);
+}
+
+.summary-value.accent {
+  color: var(--accent);
+}
+
+.summary-detail {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.product-templates {
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-message {
+  animation: shake 0.3s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* Field Error Styling */
+.field-error {
+  color: var(--bad);
+  font-size: 11px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Responsive Lot Entry */
+@media (max-width: 768px) {
+  .product-calculation .row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .calc-item {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .lot-summary-item {
+    padding: 8px;
+  }
+  
+  .product-templates .grid-3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .product-name {

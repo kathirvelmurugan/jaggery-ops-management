@@ -9,6 +9,7 @@ import Reports from './pages/Reports'
 import MasterData from './pages/MasterData'
 import AccountsPayable from './pages/AccountsPayable'
 import AccountsReceivable from './pages/AccountsReceivable'
+import UserRoles from './pages/UserRoles'
 
 export default function RoutesView(){
   return (
@@ -22,6 +23,7 @@ export default function RoutesView(){
       <Route path="/accounts-payable" element={<AccountsPayable />} />
       <Route path="/accounts-receivable" element={<AccountsReceivable />} />
       <Route path="/master" element={<MasterData />} />
+      <Route path="/user-roles" element={<UserRoles />} />
     </Routes>
   )
 }

@@ -6,7 +6,7 @@ import { Button } from '../components/Button'
 import { PaymentForm } from '../components/PaymentForm'
 import { PaymentHistory } from '../components/PaymentHistory'
 import { PaymentSummary } from '../components/PaymentSummary'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function Lots(){
   const s = useStore()
@@ -36,6 +36,8 @@ export default function Lots(){
       bay_number: ''
     }
   ])
+  const [validationErrors, setValidationErrors] = useState({})
+  const [showProductTemplates, setShowProductTemplates] = useState(false)
 
   const farmers = s.farmers
   const productList = s.products
@@ -47,7 +49,22 @@ export default function Lots(){
   const handleProductChange = (index, field, value) => {
     const updatedProducts = [...products]
     updatedProducts[index] = { ...updatedProducts[index], [field]: value }
+    
+    // Auto-calculate total kg when bags or loose kg changes
+    if (field === 'initial_bags' || field === 'initial_loose_kg') {
+      const bags = field === 'initial_bags' ? Number(value) : Number(updatedProducts[index].initial_bags || 0)
+      const looseKg = field === 'initial_loose_kg' ? Number(value) : Number(updatedProducts[index].initial_loose_kg || 0)
+      updatedProducts[index].calculated_total_kg = (bags * 30) + looseKg
+    }
+    
     setProducts(updatedProducts)
+    
+    // Clear validation errors for this product
+    if (validationErrors[`product_${index}_${field}`]) {
+      const newErrors = { ...validationErrors }
+      delete newErrors[`product_${index}_${field}`]
+      setValidationErrors(newErrors)
+    }
   }
   
   const addProduct = () => {
@@ -60,6 +77,47 @@ export default function Lots(){
       warehouse_id: form.warehouse_id || '',
       bay_number: form.bay_number || ''
     }])
+  }
+  
+  const duplicateProduct = (index) => {
+    const productToDupe = { ...products[index] }
+    productToDupe.id = Date.now()
+    productToDupe.initial_bags = 0
+    productToDupe.initial_loose_kg = 0
+    setProducts([...products, productToDupe])
+  }
+  
+  const applyToAllProducts = (field, value) => {
+    const updatedProducts = products.map(product => ({
+      ...product,
+      [field]: value
+    }))
+    setProducts(updatedProducts)
+  }
+  
+  const validateProducts = () => {
+    const errors = {}
+    let hasErrors = false
+    
+    products.forEach((product, index) => {
+      if (!product.product_id) {
+        errors[`product_${index}_product_id`] = 'Product is required'
+        hasErrors = true
+      }
+      
+      if (Number(product.initial_bags || 0) <= 0 && Number(product.initial_loose_kg || 0) <= 0) {
+        errors[`product_${index}_quantity`] = 'Either bags or loose kg must be greater than 0'
+        hasErrors = true
+      }
+      
+      if (Number(product.purchase_rate_per_kg || 0) <= 0) {
+        errors[`product_${index}_rate`] = 'Purchase rate must be greater than 0'
+        hasErrors = true
+      }
+    })
+    
+    setValidationErrors(errors)
+    return !hasErrors
   }
   
   const removeProduct = (index) => {
@@ -87,12 +145,18 @@ export default function Lots(){
   const { totalKg, totalValue } = calculateTotals()
 
   const handleSubmit = async () => {
+    // Basic form validation
     if(!form.farmer_id || !form.lot_number){
       alert('Farmer and Lot Number are required')
       return
     }
     
     // Validate products
+    if (!validateProducts()) {
+      alert('Please fix the validation errors in the products section')
+      return
+    }
+    
     const validProducts = products.filter(p => p.product_id && (p.initial_bags > 0 || p.initial_loose_kg > 0))
     if(validProducts.length === 0) {
       alert('Please add at least one product with quantity')
@@ -204,53 +268,152 @@ export default function Lots(){
         
         {/* Products Section */}
         <div style={{marginTop: 16}}>
-          <div className="row" style={{justifyContent: 'space-between', alignItems: 'center'}}>
-            <h3>Products in this Lot</h3>
-            {isMultiProduct && (
-              <Button variant="secondary" onClick={addProduct}>+ Add Product</Button>
-            )}
+          <div className="row" style={{justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8}}>
+            <h3>Products in this Lot ({products.filter(p => p.product_id).length})</h3>
+            <div className="row" style={{gap: 8}}>
+              {isMultiProduct && (
+                <>
+                  <Button variant="secondary" onClick={() => setShowProductTemplates(!showProductTemplates)}>
+                    📋 Templates
+                  </Button>
+                  <Button variant="secondary" onClick={addProduct}>
+                    ➕ Add Product
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
           
-          {products.map((product, index) => (
-            <div key={product.id} className="product-entry" style={{marginBottom: 16, padding: 16, border: '1px solid #e0e0e0', borderRadius: 8}}>
+          {/* Product Templates Modal */}
+          {showProductTemplates && isMultiProduct && (
+            <div className="product-templates" style={{marginBottom: 16, padding: 16, background: 'var(--nav-bg)', borderRadius: 8, border: '1px solid var(--border)'}}>
               <div className="row" style={{justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
-                <h4 style={{margin: 0}}>Product {index + 1}</h4>
-                {isMultiProduct && products.length > 1 && (
-                  <Button variant="secondary" onClick={() => removeProduct(index)}>Remove</Button>
-                )}
+                <h4 style={{margin: 0}}>Quick Templates</h4>
+                <Button variant="secondary" onClick={() => setShowProductTemplates(false)}>✕</Button>
+              </div>
+              <div className="grid grid-3">
+                <Field label="Apply Warehouse to All">
+                  <select onChange={e => e.target.value && applyToAllProducts('warehouse_id', e.target.value)}>
+                    <option value="">Select warehouse...</option>
+                    {warehouses.map(w => <option key={w.warehouse_id} value={w.warehouse_id}>{w.warehouse_name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Apply Bay to All">
+                  <input 
+                    placeholder="Bay number..."
+                    onBlur={e => e.target.value && applyToAllProducts('bay_number', e.target.value)}
+                  />
+                </Field>
+                <Field label="Apply Rate to All">
+                  <input 
+                    type="number"
+                    step="0.01"
+                    placeholder="Rate per kg..."
+                    onBlur={e => e.target.value && applyToAllProducts('purchase_rate_per_kg', e.target.value)}
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+          
+          {products.map((product, index) => {
+            const hasErrors = Object.keys(validationErrors).some(key => key.startsWith(`product_${index}_`))
+            
+            return (
+            <div key={product.id} className={`product-entry ${hasErrors ? 'has-errors' : ''}`} style={{
+              marginBottom: 16, 
+              padding: 16, 
+              border: `2px solid ${hasErrors ? 'var(--bad)' : 'var(--border)'}`, 
+              borderRadius: 8,
+              background: hasErrors ? 'rgba(239, 68, 68, 0.05)' : 'var(--panel)'
+            }}>
+              <div className="row" style={{justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+                <div className="row" style={{alignItems: 'center', gap: 8}}>
+                  <h4 style={{margin: 0}}>Product {index + 1}</h4>
+                  {product.product_id && (
+                    <span className="badge good">
+                      {productList.find(p => p.product_id === product.product_id)?.product_name}
+                    </span>
+                  )}
+                </div>
+                <div className="row" style={{gap: 8}}>
+                  {isMultiProduct && (
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => duplicateProduct(index)}
+                      title="Duplicate this product setup"
+                    >
+                      📋 Copy
+                    </Button>
+                  )}
+                  {isMultiProduct && products.length > 1 && (
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => removeProduct(index)}
+                      style={{color: 'var(--bad)'}}
+                    >
+                      🗑️ Remove
+                    </Button>
+                  )}
+                </div>
               </div>
               
-              <div className="grid grid-5">
-                <Field label="Product Type">
+              <div className="grid grid-3">
+                <Field 
+                  label="Product Type *" 
+                  error={validationErrors[`product_${index}_product_id`]}
+                >
                   <select 
                     value={product.product_id} 
                     onChange={e=>handleProductChange(index, 'product_id', e.target.value)}
+                    style={{borderColor: validationErrors[`product_${index}_product_id`] ? 'var(--bad)' : ''}}
                   >
                     <option value="">Select Product</option>
                     {productList.map(p => <option key={p.product_id} value={p.product_id}>{p.product_name}</option>)}
                   </select>
                 </Field>
-                <Field label="Bags (Sippam)">
+                <Field 
+                  label="Bags (30kg each)" 
+                  error={validationErrors[`product_${index}_quantity`]}
+                >
                   <input 
                     type="number" 
-                    value={product.initial_bags} 
-                    onChange={e=>handleProductChange(index, 'initial_bags', e.target.value)} 
+                    min="0"
+                    value={product.initial_bags || ''} 
+                    onChange={e=>handleProductChange(index, 'initial_bags', e.target.value)}
+                    placeholder="Number of bags"
+                    style={{borderColor: validationErrors[`product_${index}_quantity`] ? 'var(--bad)' : ''}}
                   />
                 </Field>
-                <Field label="Loose Kg">
+                <Field 
+                  label="Loose Kg" 
+                  error={validationErrors[`product_${index}_quantity`]}
+                >
                   <input 
                     type="number" 
+                    min="0"
                     step="0.001"
-                    value={product.initial_loose_kg} 
-                    onChange={e=>handleProductChange(index, 'initial_loose_kg', e.target.value)} 
+                    value={product.initial_loose_kg || ''} 
+                    onChange={e=>handleProductChange(index, 'initial_loose_kg', e.target.value)}
+                    placeholder="Additional loose kg"
+                    style={{borderColor: validationErrors[`product_${index}_quantity`] ? 'var(--bad)' : ''}}
                   />
                 </Field>
-                <Field label="Rate per Kg (₹)">
+              </div>
+              
+              <div className="grid grid-3" style={{marginTop: 8}}>
+                <Field 
+                  label="Rate per Kg (₹) *" 
+                  error={validationErrors[`product_${index}_rate`]}
+                >
                   <input 
                     type="number" 
+                    min="0"
                     step="0.01"
-                    value={product.purchase_rate_per_kg} 
-                    onChange={e=>handleProductChange(index, 'purchase_rate_per_kg', e.target.value)} 
+                    value={product.purchase_rate_per_kg || ''} 
+                    onChange={e=>handleProductChange(index, 'purchase_rate_per_kg', e.target.value)}
+                    placeholder="Purchase rate"
+                    style={{borderColor: validationErrors[`product_${index}_rate`] ? 'var(--bad)' : ''}}
                   />
                 </Field>
                 <Field label="Warehouse">
@@ -258,32 +421,113 @@ export default function Lots(){
                     value={product.warehouse_id} 
                     onChange={e=>handleProductChange(index, 'warehouse_id', e.target.value)}
                   >
-                    <option value="">Use Default</option>
+                    <option value="">Use Default ({warehouses.find(w => w.warehouse_id === form.warehouse_id)?.warehouse_name || 'None'})</option>
                     {warehouses.map(w => <option key={w.warehouse_id} value={w.warehouse_id}>{w.warehouse_name}</option>)}
                   </select>
+                </Field>
+                <Field label="Bay Number">
+                  <input 
+                    value={product.bay_number || ''} 
+                    onChange={e=>handleProductChange(index, 'bay_number', e.target.value)}
+                    placeholder={form.bay_number || 'Bay location'}
+                  />
                 </Field>
               </div>
               
               {/* Product Calculation */}
               {product.product_id && (
-                <div className="product-calculation">
-                  <div className="row">
-                    <span>Total Kg: {((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)).toFixed(3)}</span>
-                    <span>Value: ₹{(((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)) * Number(product.purchase_rate_per_kg||0)).toFixed(2)}</span>
+                <div className="product-calculation" style={{
+                  marginTop: 12, 
+                  padding: 12, 
+                  background: 'var(--nav-bg)', 
+                  borderRadius: 6,
+                  border: '1px solid var(--border)'
+                }}>
+                  <div className="row" style={{justifyContent: 'space-between', alignItems: 'center'}}>
+                    <div className="row" style={{gap: 16}}>
+                      <div className="calc-item">
+                        <span className="calc-label">Total Kg:</span>
+                        <span className="calc-value good">{((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)).toFixed(3)}</span>
+                      </div>
+                      <div className="calc-item">
+                        <span className="calc-label">Product Value:</span>
+                        <span className="calc-value accent">₹{(((Number(product.initial_bags||0) * 30) + Number(product.initial_loose_kg||0)) * Number(product.purchase_rate_per_kg||0)).toFixed(2)}</span>
+                      </div>
+                      {Number(product.initial_bags||0) > 0 && (
+                        <div className="calc-item">
+                          <span className="calc-label">Bag Weight:</span>
+                          <span className="calc-value">{(Number(product.initial_bags||0) * 30).toFixed(1)} kg</span>
+                        </div>
+                      )}
+                    </div>
+                    {isMultiProduct && (
+                      <span className="badge good">Product {index + 1}</span>
+                    )}
                   </div>
+                  
+                  {/* Error Messages */}
+                  {Object.keys(validationErrors).filter(key => key.startsWith(`product_${index}_`)).map(errorKey => (
+                    <div key={errorKey} className="error-message" style={{
+                      marginTop: 8,
+                      padding: 8,
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      borderRadius: 4,
+                      color: 'var(--bad)',
+                      fontSize: 12
+                    }}>
+                      {validationErrors[errorKey]}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
         
-        {/* Lot Totals */}
-        <div className="lot-totals">
-          <h4>Lot Summary</h4>
-          <div className="row">
-            <div className="badge good">Total Kg: {totalKg.toFixed(2)}</div>
-            <div className="badge good">Total Value: ₹{totalValue.toFixed(2)}</div>
-            <div className="badge good">Products: {products.filter(p => p.product_id).length}</div>
+        {/* Enhanced Lot Totals */}
+        <div className="lot-totals" style={{
+          marginTop: 20,
+          padding: 20,
+          background: 'linear-gradient(135deg, var(--panel), var(--nav-bg))',
+          borderRadius: 12,
+          border: '2px solid var(--accent)'
+        }}>
+          <h4 style={{margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8}}>
+            📊 Lot Summary
+            {totalKg > 0 && totalValue > 0 && (
+              <span className="badge good">Ready to Save</span>
+            )}
+          </h4>
+          <div className="grid grid-4">
+            <div className="lot-summary-item">
+              <div className="summary-label">Total Weight</div>
+              <div className="summary-value good">{totalKg.toFixed(2)} kg</div>
+              <div className="summary-detail">{(totalKg / 30).toFixed(1)} bags equivalent</div>
+            </div>
+            <div className="lot-summary-item">
+              <div className="summary-label">Total Value</div>
+              <div className="summary-value accent">₹{totalValue.toFixed(2)}</div>
+              <div className="summary-detail">₹{totalKg > 0 ? (totalValue / totalKg).toFixed(2) : '0'}/kg average</div>
+            </div>
+            <div className="lot-summary-item">
+              <div className="summary-label">Products</div>
+              <div className="summary-value">{products.filter(p => p.product_id).length}</div>
+              <div className="summary-detail">{isMultiProduct ? 'Multi-product' : 'Single product'} lot</div>
+            </div>
+            <div className="lot-summary-item">
+              <div className="summary-label">Status</div>
+              <div className="summary-value">
+                {totalKg > 0 && totalValue > 0 ? (
+                  <span className="badge good">✓ Valid</span>
+                ) : (
+                  <span className="badge warn">⚠ Incomplete</span>
+                )}
+              </div>
+              <div className="summary-detail">
+                {products.filter(p => !p.product_id).length > 0 && 'Missing products'}
+              </div>
+            </div>
           </div>
         </div>
 

@@ -1,3 +1,6 @@
+import { useStore } from '../store/store'
+import { FinancialData } from './RoleBasedAccess'
+
 export function PaymentSummary({ 
   totalValue, 
   totalPaid,
@@ -7,6 +10,7 @@ export function PaymentSummary({
   paidLabel = "Total Paid",
   balanceLabel = "Balance Due"
 }) {
+  const s = useStore()
   const balance = totalValue - totalPaid
   const isOverpaid = balance < 0
   const isPaid = Math.abs(balance) < 0.01
@@ -21,59 +25,61 @@ export function PaymentSummary({
     <div className="panel">
       <h3>{title}</h3>
       
-      {/* Main Financial Summary */}
-      <div className="grid grid-4">
-        <div className="financial-summary-item">
-          <div className="label">{valueLabel}</div>
-          <div className="value total">₹{Number(totalValue).toFixed(2)}</div>
-        </div>
-        <div className="financial-summary-item">
-          <div className="label">{paidLabel}</div>
-          <div className="value paid">₹{Number(totalPaid).toFixed(2)}</div>
-        </div>
-        <div className="financial-summary-item">
-          <div className="label">{balanceLabel}</div>
-          <div className={`value balance ${
-            isPaid ? 'paid-full' : isOverpaid ? 'overpaid' : 'pending'
-          }`}>
-            ₹{Math.abs(balance).toFixed(2)}
-            {isPaid && ' (Paid)'}
-            {isOverpaid && ' (Overpaid)'}
+      <FinancialData>
+        {/* Main Financial Summary */}
+        <div className="grid grid-4">
+          <div className="financial-summary-item">
+            <div className="label">{valueLabel}</div>
+            <div className="value total">₹{Number(totalValue).toFixed(2)}</div>
           </div>
-        </div>
-        <div className="financial-summary-item">
-          <div className="label">Payment Status</div>
-          <div className={`status-badge ${
-            isPaid ? 'status-paid' : balance > 0 ? 'status-pending' : 'status-overpaid'
-          }`}>
-            {isPaid ? 'PAID' : balance > 0 ? 'PENDING' : 'OVERPAID'}
+          <div className="financial-summary-item">
+            <div className="label">{paidLabel}</div>
+            <div className="value paid">₹{Number(totalPaid).toFixed(2)}</div>
           </div>
-        </div>
-      </div>
-      
-      {/* Payment Method Breakdown */}
-      {payments.length > 0 && (
-        <>
-          <h4 style={{ marginTop: 16, marginBottom: 8, fontSize: 14, color: '#666' }}>Payment Method Breakdown</h4>
-          <div className="grid grid-3">
-            <div className="breakdown-item">
-              <div className="breakdown-label">Cash Payments</div>
-              <div className="breakdown-value cash">₹{totalCash.toFixed(2)}</div>
-              <div className="breakdown-count">({cashPayments.length} transactions)</div>
-            </div>
-            <div className="breakdown-item">
-              <div className="breakdown-label">RTGS Payments</div>
-              <div className="breakdown-value rtgs">₹{totalRTGS.toFixed(2)}</div>
-              <div className="breakdown-count">({rtgsPayments.length} transactions)</div>
-            </div>
-            <div className="breakdown-item">
-              <div className="breakdown-label">Total Transactions</div>
-              <div className="breakdown-value total-trans">₹{(totalCash + totalRTGS).toFixed(2)}</div>
-              <div className="breakdown-count">({payments.length} total)</div>
+          <div className="financial-summary-item">
+            <div className="label">{balanceLabel}</div>
+            <div className={`value balance ${
+              isPaid ? 'paid-full' : isOverpaid ? 'overpaid' : 'pending'
+            }`}>
+              ₹{Math.abs(balance).toFixed(2)}
+              {isPaid && ' (Paid)'}
+              {isOverpaid && ' (Overpaid)'}
             </div>
           </div>
-        </>
-      )}
+          <div className="financial-summary-item">
+            <div className="label">Payment Status</div>
+            <div className={`status-badge ${
+              isPaid ? 'status-paid' : balance > 0 ? 'status-pending' : 'status-overpaid'
+            }`}>
+              {isPaid ? 'PAID' : balance > 0 ? 'PENDING' : 'OVERPAID'}
+            </div>
+          </div>
+        </div>
+        
+        {/* Payment Method Breakdown */}
+        {payments.length > 0 && (
+          <>
+            <h4 style={{ marginTop: 16, marginBottom: 8, fontSize: 14, color: '#666' }}>Payment Method Breakdown</h4>
+            <div className="grid grid-3">
+              <div className="breakdown-item">
+                <div className="breakdown-label">Cash Payments</div>
+                <div className="breakdown-value cash">₹{totalCash.toFixed(2)}</div>
+                <div className="breakdown-count">({cashPayments.length} transactions)</div>
+              </div>
+              <div className="breakdown-item">
+                <div className="breakdown-label">RTGS Payments</div>
+                <div className="breakdown-value rtgs">₹{totalRTGS.toFixed(2)}</div>
+                <div className="breakdown-count">({rtgsPayments.length} transactions)</div>
+              </div>
+              <div className="breakdown-item">
+                <div className="breakdown-label">Total Transactions</div>
+                <div className="breakdown-value total-trans">₹{(totalCash + totalRTGS).toFixed(2)}</div>
+                <div className="breakdown-count">({payments.length} total)</div>
+              </div>
+            </div>
+          </>
+        )}
+      </FinancialData>
       
       <style jsx>{`
         .financial-summary-item {

@@ -2,21 +2,23 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useStore } from './store/store'
+import { UserInfo, PermissionGate, RoleGate } from './components/RoleBasedAccess'
 import RoutesView from './routes'
 
 const menu = [
-  { to: '/', label: 'Dashboard', icon: '📊' },
-  { to: '/lots', label: 'Lots', icon: '📦' },
-  { to: '/sales-orders', label: 'Sales', icon: '🛒' },
-  { to: '/packing-queue', label: 'Packing', icon: '📋' },
-  { to: '/payments', label: 'Payments', icon: '💰' },
-  { to: '/reports', label: 'Reports', icon: '📈' },
-  { to: '/master', label: 'Master', icon: '⚙️' },
+  { to: '/', label: 'Dashboard', icon: '📊', permission: 'read' },
+  { to: '/lots', label: 'Lots', icon: '📦', permission: 'read' },
+  { to: '/sales-orders', label: 'Sales', icon: '🛒', permission: 'read' },
+  { to: '/packing-queue', label: 'Packing', icon: '📋', permission: 'read' },
+  { to: '/payments', label: 'Payments', icon: '💰', permission: 'financial' },
+  { to: '/reports', label: 'Reports', icon: '📈', permission: 'read' },
+  { to: '/master', label: 'Master', icon: '⚙️', permission: 'write' },
+  { to: '/user-roles', label: 'Users', icon: '👥', roles: ['admin'] },
 ]
 
 export default function App(){
   const location = useLocation()
-  const { initializeStore, initialized, loading, errors } = useStore()
+  const { initializeStore, initialized, loading, errors, hasPermission, currentUser } = useStore()
   const [initError, setInitError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
   const [hasAttemptedInit, setHasAttemptedInit] = useState(false)
@@ -112,25 +114,53 @@ export default function App(){
             <span className="app-subtitle">Simple Operations Management</span>
           </div>
           <div className="header-info">
+            <UserInfo compact />
             <span className="connection-status">🟢 Connected</span>
             <span className="sippam-info">1 Sippam = 30kg</span>
           </div>
         </div>
       </header>
       
-      {/* Simple Navigation */}
+      {/* Simple Navigation with Role-Based Access */}
       <nav className="app-nav">
         <div className="nav-container">
-          {menu.map(m => (
-            <NavLink 
-              key={m.to} 
-              to={m.to} 
-              className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <span className="nav-icon">{m.icon}</span>
-              <span className="nav-label">{m.label}</span>
-            </NavLink>
-          ))}
+          {menu.map(m => {
+            // Check permissions for menu item
+            let hasAccess = true
+            
+            if (m.permission && !hasPermission(m.permission)) {
+              hasAccess = false
+            }
+            
+            if (m.roles && (!currentUser || !m.roles.includes(currentUser.role))) {
+              hasAccess = false
+            }
+            
+            if (!hasAccess) {
+              return (
+                <div 
+                  key={m.to} 
+                  className="nav-item disabled"
+                  title={`Requires ${m.permission || m.roles?.join('/') || 'permission'}`}
+                >
+                  <span className="nav-icon">{m.icon}</span>
+                  <span className="nav-label">{m.label}</span>
+                  <span className="nav-lock">🔒</span>
+                </div>
+              )
+            }
+            
+            return (
+              <NavLink 
+                key={m.to} 
+                to={m.to} 
+                className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}
+              >
+                <span className="nav-icon">{m.icon}</span>
+                <span className="nav-label">{m.label}</span>
+              </NavLink>
+            )
+          })}
         </div>
       </nav>
       
@@ -145,6 +175,9 @@ export default function App(){
       <footer className="app-footer">
         <div className="footer-content">
           <span>Jaggery OMS • React + Supabase</span>
+          {currentUser && (
+            <span className="footer-user">Logged in as {currentUser.full_name} ({currentUser.role})</span>
+          )}
         </div>
       </footer>
     </div>

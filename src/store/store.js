@@ -7,6 +7,10 @@ const initialState = {
   // Meta/Settings
   meta: { sippamKgDefault: 30 },
   
+  // User Management
+  currentUser: null,
+  users: [],
+  
   // Master data (enhanced schema)
   products: [],
   warehouses: [],
@@ -36,12 +40,113 @@ export const useStore = create((set, get) => ({
   ...initialState,
 
   // =============================================================================
+  // USER MANAGEMENT AND AUTHENTICATION
+  // =============================================================================
+  
+  // User roles: 'admin', 'manager', 'dispatch'
+  setCurrentUser: (user) => {
+    set({ currentUser: user })
+  },
+  
+  // Check user permissions
+  hasPermission: (permission) => {
+    const user = get().currentUser
+    if (!user) return false
+    
+    const permissions = {
+      admin: ['read', 'write', 'delete', 'financial'],
+      manager: ['read', 'write', 'financial'],
+      dispatch: ['read', 'write']
+    }
+    
+    return permissions[user.role]?.includes(permission) || false
+  },
+  
+  // Quick role checks
+  isAdmin: () => get().currentUser?.role === 'admin',
+  isManager: () => get().currentUser?.role === 'manager',
+  isDispatch: () => get().currentUser?.role === 'dispatch',
+  
+  // Can see financial data
+  canViewFinancials: () => {
+    const user = get().currentUser
+    return user?.role === 'admin' || user?.role === 'manager'
+  },
+  
+  // Can delete records
+  canDelete: () => get().currentUser?.role === 'admin',
+  
+  // User management
+  addUser: async (userData) => {
+    try {
+      const userRecord = {
+        username: userData.username,
+        full_name: userData.fullName,
+        role: userData.role,
+        email: userData.email,
+        is_active: true,
+        created_at: new Date().toISOString()
+      }
+      
+      // For demo purposes, we'll store users in local storage
+      // In production, this would be handled by proper authentication
+      const users = get().users
+      const newUser = { ...userRecord, user_id: Date.now().toString() }
+      set({ users: [...users, newUser] })
+      
+      return newUser
+      
+    } catch (error) {
+      console.error('Error adding user:', error)
+      throw error
+    }
+  },
+  
+  // Initialize default users for demo
+  initializeDefaultUsers: () => {
+    const defaultUsers = [
+      {
+        user_id: '1',
+        username: 'admin',
+        full_name: 'System Administrator',
+        role: 'admin',
+        email: 'admin@jaggeryops.com',
+        is_active: true
+      },
+      {
+        user_id: '2', 
+        username: 'manager',
+        full_name: 'Operations Manager',
+        role: 'manager',
+        email: 'manager@jaggeryops.com',
+        is_active: true
+      },
+      {
+        user_id: '3',
+        username: 'dispatch',
+        full_name: 'Dispatch Officer',
+        role: 'dispatch',
+        email: 'dispatch@jaggeryops.com',
+        is_active: true
+      }
+    ]
+    
+    set({ 
+      users: defaultUsers,
+      currentUser: defaultUsers[0] // Default to admin for demo
+    })
+  },
+  
+  // =============================================================================
   // INITIALIZATION AND DATA LOADING
   // =============================================================================
   
   initializeStore: async () => {
     try {
       set({ loading: true })
+      
+      // Initialize default users for demo
+      get().initializeDefaultUsers()
       
       // Load all master data in parallel
       const [productsRes, farmersRes, customersRes, warehousesRes] = await Promise.all([
@@ -78,6 +183,8 @@ export const useStore = create((set, get) => ({
         initialized: true,
         loading: false,
       })
+      
+      console.log('Store initialized successfully with user roles')
       
     } catch (error) {
       console.error('Store initialization error:', error)
